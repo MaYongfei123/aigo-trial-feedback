@@ -1,4 +1,4 @@
-import { ArrowLeft, CheckCircle2, ClipboardCopy, Database, Download, Edit3, ImagePlus, Minus, Plus, RotateCcw, Save, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ClipboardCopy, Database, Download, Edit3, ImagePlus, Minus, Plus, RotateCcw, Save, Share2, Sparkles, Trash2, X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { courseSystems, grades } from '../constants/assessment.js';
 
@@ -117,7 +117,7 @@ function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
+    reader.onerror = () => reject(new Error('图片读取失败，请重新选择照片。'));
     reader.readAsDataURL(file);
   });
 }
@@ -131,8 +131,7 @@ function loadImage(src) {
   });
 }
 
-async function compressImageFile(file) {
-  const sourceUrl = await readFileAsDataUrl(file);
+async function compressImageDataUrl(sourceUrl) {
   const image = await loadImage(sourceUrl);
   const maxDimension = 1400;
   const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
@@ -436,6 +435,18 @@ async function createTrialShareCanvas(record, cardData, photos) {
   return canvas;
 }
 
+function canvasToPngBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+      } else {
+        reject(new Error('生成 PNG 图片失败，请稍后重试。'));
+      }
+    }, 'image/png');
+  });
+}
+
 function buildRecord(form) {
   return {
     id: form.id || '',
@@ -537,6 +548,7 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
   const [mode, setMode] = useState('editor');
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportPreview, setExportPreview] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState('idle');
   const [localToast, setLocalToast] = useState('');
@@ -663,21 +675,64 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
   }
 
   async function handlePhotosChange(event) {
-    const files = Array.from(event.target.files || []);
-    if (!files.length) return;
+    const availableSlots = Math.max(0, 2 - photoItemsRef.current.length);
+    const selectedFiles = Array.from(event.target.files || []);
+    const files = selectedFiles.slice(0, availableSlots);
+    if (!files.length) {
+      if (selectedFiles.length) setLocalToast('当前最多上传 2 张课堂照片。');
+      event.target.value = '';
+      return;
+    }
 
     try {
-      const sourceDataUrls = await Promise.all(files.map(compressImageFile));
-      const newItems = await Promise.all(sourceDataUrls.map(createPhotoItem));
-      const nextItems = [...photoItemsRef.current, ...newItems];
+      const sourceDataUrls = await Promise.all(files.map(readFileAsDataUrl));
+      const immediateItems = sourceDataUrls.map((sourceDataUrl) => ({
+        id: crypto.randomUUID(),
+        sourceDataUrl,
+        croppedDataUrl: sourceDataUrl,
+        zoom: 1,
+        offsetX: 0,
+        offsetY: 0,
+        processing: true,
+      }));
+      const nextItems = [...photoItemsRef.current, ...immediateItems];
       replacePhotoItems(nextItems);
       setForm((current) => ({
         ...current,
         photoUrls: nextItems.map((item) => item.croppedDataUrl),
       }));
       setSaveStatus('idle');
+      setLocalToast(selectedFiles.length > files.length ? '已显示前 2 张课堂照片，当前最多上传 2 张。' : '');
+
+      for (let index = 0; index < immediateItems.length; index += 1) {
+        const immediateItem = immediateItems[index];
+        try {
+          const compressedDataUrl = await compressImageDataUrl(sourceDataUrls[index]);
+          const processedItem = await createPhotoItem(compressedDataUrl);
+          const currentItems = photoItemsRef.current.map((item) =>
+            item.id === immediateItem.id
+              ? {
+                  ...processedItem,
+                  id: immediateItem.id,
+                  processing: false,
+                }
+              : item,
+          );
+          replacePhotoItems(currentItems);
+          setForm((current) => ({
+            ...current,
+            photoUrls: currentItems.map((item) => item.croppedDataUrl),
+          }));
+        } catch {
+          const currentItems = photoItemsRef.current.map((item) =>
+            item.id === immediateItem.id ? { ...item, processing: false } : item,
+          );
+          replacePhotoItems(currentItems);
+          setLocalToast('图片读取失败，请重新选择照片。');
+        }
+      }
     } catch (error) {
-      setLocalToast(getFriendlyErrorMessage(error) || '图片读取失败，请重新选择课堂照片。');
+      setLocalToast(error?.message || '图片读取失败，请重新选择照片。');
     } finally {
       event.target.value = '';
     }
@@ -889,14 +944,47 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
       const photos = Array.isArray(record.photoUrls) ? record.photoUrls : [];
       const canvas = await createTrialShareCanvas(record, shareCardData, photos);
       const dataUrl = canvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.download = `${record.studentName || '学员'}-试听课学习反馈-${record.lessonDate || record.trialDate || today}.png`;
-      link.href = dataUrl;
-      link.click();
+      const blob = await canvasToPngBlob(canvas);
+      const fileName = `${record.studentName || '学员'}-试听课学习反馈-${record.lessonDate || record.trialDate || today}.png`;
+      const file = typeof File === 'function' ? new File([blob], fileName, { type: 'image/png' }) : null;
+      const canShareFile =
+        Boolean(file) &&
+        typeof navigator.share === 'function' &&
+        typeof navigator.canShare === 'function' &&
+        navigator.canShare({ files: [file] });
+
+      setExportPreview({
+        dataUrl,
+        file,
+        fileName,
+        canShareFile,
+      });
     } catch (error) {
       setLocalToast(error?.message || '导出图片失败，请稍后重试。');
     } finally {
       setExporting(false);
+    }
+  }
+
+  function downloadExportPreview() {
+    if (!exportPreview) return;
+    const link = document.createElement('a');
+    link.download = exportPreview.fileName;
+    link.href = exportPreview.dataUrl;
+    link.click();
+  }
+
+  async function shareExportPreview() {
+    if (!exportPreview?.canShareFile) return;
+    try {
+      await navigator.share({
+        files: [exportPreview.file],
+        title: '试听课学习反馈',
+      });
+    } catch (error) {
+      if (error?.name !== 'AbortError') {
+        setLocalToast(error?.message || '分享图片失败，请稍后重试。');
+      }
     }
   }
 
@@ -1273,6 +1361,50 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
       </div>
 
       {mode === 'share' ? renderShare() : renderEditor()}
+
+      {exportPreview && (
+        <div className="trialExportOverlay" role="presentation" onClick={() => setExportPreview(null)}>
+          <div
+            className="trialExportDialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="试听课反馈图片预览"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="trialExportDialogHeader">
+              <div>
+                <span>图片已生成</span>
+                <h2>试听课反馈图片预览</h2>
+              </div>
+              <button className="iconButton" type="button" aria-label="关闭图片预览" onClick={() => setExportPreview(null)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="trialExportImageFrame">
+              <img src={exportPreview.dataUrl} alt="试听课反馈 PNG 预览" />
+            </div>
+
+            <p className="trialExportHint">长按图片可保存到相册，或点击分享发送给家长。</p>
+
+            <div className="trialExportActions">
+              {exportPreview.canShareFile && (
+                <button className="primaryButton narrow" type="button" onClick={shareExportPreview}>
+                  <Share2 size={18} />
+                  分享图片
+                </button>
+              )}
+              <button className="secondaryButton" type="button" onClick={downloadExportPreview}>
+                <Download size={18} />
+                下载图片
+              </button>
+              <button className="secondaryButton" type="button" onClick={() => setExportPreview(null)}>
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
