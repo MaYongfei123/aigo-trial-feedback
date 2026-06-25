@@ -2,8 +2,10 @@ import {
   getAbilityDimensions,
   getDimensionId,
   legacyAbilityDimensions,
+  formatCourseTypes,
   normalizeAbilityDimension,
   normalizeCourseInfo,
+  normalizeCourseTypes,
 } from '../constants/assessment.js';
 
 const adviceByDimension = {
@@ -60,10 +62,14 @@ export function getStageObservation(form = {}) {
 }
 
 export function getStageTimeText(form = {}) {
-  const start = form.stageStartDate || '';
-  const end = form.stageEndDate || form.assessmentDate || '';
-  if (start && end && start !== end) return `${start} 至 ${end}`;
-  return start || end || form.assessmentDate || '';
+  const start = form.startDate || form.stageStartDate || '';
+  const end = form.endDate || form.stageEndDate || '';
+  const legacyDate = !start && !end ? form.assessmentDate || form.date || '' : '';
+  const formatDate = (value) => (value ? value.replaceAll('-', '/') : '');
+  if (start && end) return `${formatDate(start)} - ${formatDate(end)}`;
+  if (start) return `${formatDate(start)} 起`;
+  if (end || legacyDate) return `截至 ${formatDate(end || legacyDate)}`;
+  return '';
 }
 
 function shortenText(text, maxLength) {
@@ -212,7 +218,7 @@ export function generateReport(form, scores, dimensions = getAbilityDimensions(f
   }
 
   const name = form.studentName || '该学员';
-  const stageContext = `本阶段围绕所选学习内容与${courseInfo.courseFormat || '课程类型'}进行能力测评。`;
+  const stageContext = '本阶段围绕所选学习内容进行能力测评。';
   const cycleText = stageObservation.assessmentCycle ? `测评周期：${stageObservation.assessmentCycle}。` : '';
   const strengthDetail = `这些维度体现出学员当前较稳定的能力基础，可作为后续阶段继续巩固的方向。`;
   const improvementDetail = `这些维度是下一阶段观察和训练的重点，建议通过阶段任务持续跟进。`;
@@ -261,14 +267,17 @@ function getRecordForm(record) {
       : record.projectId
         ? [record.projectId]
         : [];
-  const stageStartDate = sourceForm.stageStartDate || '';
-  const stageEndDate = sourceForm.stageEndDate || sourceForm.assessmentDate || record.assessmentDate || '';
+  const courseTypes = normalizeCourseTypes(sourceForm);
+  const courseFormat = formatCourseTypes(courseTypes);
+  const stageStartDate = sourceForm.startDate || sourceForm.stageStartDate || '';
+  const stageEndDate = sourceForm.endDate || sourceForm.stageEndDate || record.endDate || '';
   return {
     studentName: sourceForm.studentName || record.studentName || '',
     grade: sourceForm.grade || record.grade || '',
     courseSystem: courseInfo.courseSystem,
     abilityStage: courseInfo.abilityStage,
-    courseFormat: courseInfo.courseFormat,
+    courseTypes,
+    courseFormat: courseFormat || courseInfo.courseFormat,
     courseStage: courseInfo.courseStage,
     assessmentTemplate: courseInfo.assessmentTemplate,
     projectIds,
@@ -276,11 +285,12 @@ function getRecordForm(record) {
     projectName: sourceForm.projectName || record.projectName || '',
     projectLearningContent: sourceForm.projectLearningContent || record.projectLearningContent || '',
     projectAbilities: sourceForm.projectAbilities || record.projectAbilities || '',
-    projectStageOutcome: sourceForm.projectStageOutcome || record.projectStageOutcome || '',
     projectParentReportDescription: sourceForm.projectParentReportDescription || record.projectParentReportDescription || '',
     stageStartDate,
     stageEndDate,
-    assessmentDate: sourceForm.assessmentDate || stageEndDate || stageStartDate || record.assessmentDate || '',
+    startDate: stageStartDate,
+    endDate: stageEndDate,
+    assessmentDate: sourceForm.assessmentDate || stageEndDate || stageStartDate || record.assessmentDate || record.date || '',
     teacher: sourceForm.teacher || record.teacher || '',
     stageObservation,
   };
@@ -347,15 +357,13 @@ export function buildParentReportText(record) {
   const form = getRecordForm(record);
   const report = getRecordReport(record);
   const stageObservation = getStageObservation(form);
-  const stageTimeText = getStageTimeText(form) || '未填写';
+  const stageTimeText = getStageTimeText(form);
   const scores = record.scores || emptyScores();
   const summary = getScoreSummary(scores, getRecordDimensions(record));
   const name = form.studentName || '孩子';
   const strengths = summary.strengths.map((item) => `${item.label}${item.score}分`).join('、');
   const improvements = summary.improvements.map((item) => `${item.label}${item.score}分`).join('、');
-  const courseText = [form.courseSystem || '创客课程', form.courseFormat || '当前课程类型']
-    .filter(Boolean)
-    .join(' · ');
+  const courseText = form.courseSystem || '创客课程';
   const projectLines =
     form.projectName || form.projectParentReportDescription || form.projectLearningContent
       ? [
@@ -373,11 +381,10 @@ export function buildParentReportText(record) {
   if (record.comparison) {
     return [
       `【爱高创客阶段成长对比报告】`,
-      `${name}家长您好，孩子本次 ${courseText} 测评已完成。`,
+      `${name}家长您好，孩子本阶段 ${courseText} 测评已完成。`,
       `课程体系：${form.courseSystem || '未填写'}`,
-      `课程类型：${form.courseFormat || '未填写'}`,
       stageObservation.assessmentCycle ? `测评周期：${stageObservation.assessmentCycle}` : null,
-      `阶段时间：${stageTimeText}`,
+      stageTimeText ? `学习周期：${stageTimeText}` : null,
       `授课老师：${form.teacher || '未填写'}`,
       `上次平均分：${record.comparison.previousAverage.toFixed(1)} / 5`,
       `本次平均分：${record.comparison.currentAverage.toFixed(1)} / 5`,
@@ -403,11 +410,10 @@ export function buildParentReportText(record) {
 
   return [
     `【爱高创客阶段测评报告】`,
-    `${name}家长您好，孩子本次 ${courseText} 测评已完成。`,
+    `${name}家长您好，孩子本阶段 ${courseText} 测评已完成。`,
     `课程体系：${form.courseSystem || '未填写'}`,
-    `课程类型：${form.courseFormat || '未填写'}`,
     stageObservation.assessmentCycle ? `测评周期：${stageObservation.assessmentCycle}` : null,
-    `阶段时间：${stageTimeText}`,
+    stageTimeText ? `学习周期：${stageTimeText}` : null,
     `授课老师：${form.teacher || '未填写'}`,
     `综合得分：${summary.average.toFixed(1)} / 5`,
     ...projectLines,
@@ -425,7 +431,7 @@ export function buildParentReportText(record) {
 export function getShareCardContent(record) {
   const form = getRecordForm(record);
   const stageObservation = getStageObservation(form);
-  const stageTimeText = getStageTimeText(form) || '未填写';
+  const stageTimeText = getStageTimeText(form);
   const scores = record.scores || emptyScores();
   const summary = getScoreSummary(scores, getRecordDimensions(record));
   const highlights = getShareAbilityHighlights(summary);
@@ -437,15 +443,16 @@ export function getShareCardContent(record) {
     grade: form.grade || '未填写',
     courseSystem: form.courseSystem || '未填写',
     abilityStage: form.abilityStage || '未填写',
-    courseFormat: form.courseFormat || '未填写',
-    courseType: form.courseFormat || '未填写',
+    courseTypes: form.courseTypes || [],
+    courseFormat: formatCourseTypes(form) || form.courseFormat || '未填写',
+    courseType: formatCourseTypes(form) || form.courseFormat || '未填写',
     courseStage: form.courseStage || form.abilityStage || '未填写',
     projectName: form.projectName || '',
     projectLearningContent: form.projectLearningContent || '',
     projectAbilities: form.projectAbilities || '',
-    projectStageOutcome: form.projectStageOutcome || '',
     projectParentReportDescription: form.projectParentReportDescription || '',
     assessmentDate: stageTimeText,
+    learningPeriod: stageTimeText,
     stageTime: stageTimeText,
     teacher: form.teacher || '未填写',
     score: summary.average.toFixed(1),
@@ -477,9 +484,8 @@ export function buildShareCardReportText(record) {
       `学员：${content.name}`,
       `年级：${content.grade}`,
       `课程体系：${content.courseSystem}`,
-      `课程类型：${content.courseType}`,
       content.cycleSummary ? `测评周期：${content.cycleSummary}` : null,
-      `阶段时间：${content.stageTime}`,
+      content.learningPeriod ? `学习周期：${content.learningPeriod}` : null,
       `本次得分：${content.comparison.currentAverage.toFixed(1)} / 5`,
       `上次得分：${content.comparison.previousAverage.toFixed(1)} / 5`,
       `分数变化：${content.comparison.averageChange >= 0 ? '+' : ''}${content.comparison.averageChange.toFixed(1)} 分`,
@@ -501,9 +507,8 @@ export function buildShareCardReportText(record) {
     `学员：${content.name}`,
     `年级：${content.grade}`,
     `课程体系：${content.courseSystem}`,
-    `课程类型：${content.courseType}`,
     content.cycleSummary ? `测评周期：${content.cycleSummary}` : null,
-    `阶段时间：${content.stageTime}`,
+    content.learningPeriod ? `学习周期：${content.learningPeriod}` : null,
     `老师：${content.teacher}`,
     `综合得分：${content.score} / 5`,
     content.comparison

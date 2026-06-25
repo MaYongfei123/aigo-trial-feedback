@@ -1,18 +1,17 @@
-import { ArrowLeft, BookOpenCheck, Bot, Database, FileText, FolderKanban, History, MessageSquareText, Save, Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { ArrowLeft, Database, Save, Search } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import HistoryList from './components/HistoryList.jsx';
-import ParentReport from './components/ParentReport.jsx';
 import ParentShareCard from './components/ParentShareCard.jsx';
 import ProjectLibrary from './components/ProjectLibrary.jsx';
 import RadarScoreChart from './components/RadarScoreChart.jsx';
-import ReportPreview from './components/ReportPreview.jsx';
+import ReportPhotoFrame, { defaultReportPhotoCrop, normalizeReportPhotoCrop } from './components/ReportPhotoFrame.jsx';
 import RobotSpecialTestDemo from './components/RobotSpecialTestDemo.jsx';
-import ScoreGuide from './components/ScoreGuide.jsx';
 import ScoreInput from './components/ScoreInput.jsx';
 import TrialClassFeedback from './components/TrialClassFeedback.jsx';
+import FeatureCards from './components/home/FeatureCards.jsx';
+import HomeHeader from './components/home/HomeHeader.jsx';
+import SecondaryMenu from './components/home/SecondaryMenu.jsx';
 import {
-  courseFormats,
-  courseSystems,
   getAbilityDimensions,
   getDimensionId,
   grades,
@@ -31,38 +30,32 @@ import {
 import {
   createEmptyScores,
   generateReport,
-  getComparisonAnalysis,
   getScoreSummary,
   getScoreValue,
-  getStageTimeText,
 } from './utils/report.js';
 
-const today = new Date().toISOString().slice(0, 10);
+const routePaths = new Set(['/', '/report', '/report/preview', '/trial', '/lab', '/history', '/library']);
 
 const initialForm = {
   studentName: '',
   grade: '',
   courseSystem: '',
   abilityStage: '',
-  courseFormat: '',
   projectIds: [],
   projectId: '',
   projectName: '',
   projectLearningContent: '',
   projectAbilities: '',
-  projectStageOutcome: '',
   projectParentReportDescription: '',
-  stageStartDate: today,
-  stageEndDate: today,
-  assessmentDate: today,
+  stageStartDate: '',
+  stageEndDate: '',
+  assessmentDate: '',
   teacher: '',
   stageObservation: {
     assessmentCycle: '',
     teacherComment: '',
   },
 };
-
-const previousComparisonModes = new Set(['previous', 'latest', 'last', 'withLast']);
 
 function createRecord(form, currentAssessment, report, comparisonAssessment) {
   return {
@@ -103,6 +96,29 @@ function sortAssessmentRecords(records) {
   });
 }
 
+function normalizeRoute(path) {
+  const cleanPath = path.replace(/\/+$/, '') || '/';
+  return routePaths.has(cleanPath) ? cleanPath : '/';
+}
+
+function getRouteFromLocation() {
+  const base = import.meta.env.BASE_URL || '/';
+  const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+  let path = window.location.pathname;
+
+  if (normalizedBase !== '/' && path.startsWith(normalizedBase)) {
+    path = `/${path.slice(normalizedBase.length)}`;
+  }
+
+  return normalizeRoute(path);
+}
+
+function getUrlForRoute(path) {
+  const base = import.meta.env.BASE_URL || '/';
+  if (base === '/') return path;
+  return `${base.replace(/\/$/, '')}${path}`;
+}
+
 function clearSelectedProjectFields(form) {
   return {
     ...form,
@@ -111,7 +127,6 @@ function clearSelectedProjectFields(form) {
     projectName: '',
     projectLearningContent: '',
     projectAbilities: '',
-    projectStageOutcome: '',
     projectParentReportDescription: '',
   };
 }
@@ -131,9 +146,6 @@ function summarizeProjects(selectedProjects) {
   const projectNames = selectedProjects.map((project) => project.projectName).filter(Boolean);
   const learningItems = uniqueProjectItems(selectedProjects.flatMap((project) => splitProjectText(project.learningContent)));
   const abilityItems = uniqueProjectItems(selectedProjects.flatMap((project) => splitProjectText(project.relatedAbilities)));
-  const outcomeParagraphs = selectedProjects
-    .filter((project) => project.stageOutcome)
-    .map((project) => `【${project.projectName || '学习内容'}】${project.stageOutcome}`);
   const parentParagraphs = selectedProjects
     .filter((project) => project.parentReportDescription)
     .map((project) => `【${project.projectName || '学习内容'}】${project.parentReportDescription}`);
@@ -144,13 +156,120 @@ function summarizeProjects(selectedProjects) {
     projectName: projectNames.join('、'),
     projectLearningContent: learningItems.join('、'),
     projectAbilities: abilityItems.join('、'),
-    projectStageOutcome: outcomeParagraphs.join('\n'),
     projectParentReportDescription: parentParagraphs.join('\n'),
   };
 }
 
+function collectSummaryKeywords(...values) {
+  const rawText = values.join('、');
+  const knownProjectPatterns = [
+    /[一二三四五六七八九十\d]+轴机械臂/g,
+    /笛卡尔机械臂/g,
+    /火星家园挑战/g,
+    /机械臂抓举/g,
+    /机械臂控制算法/g,
+    /资源运输(?:任务|项目)?/g,
+    /机械臂装车(?:实测|任务)?/g,
+  ];
+  const knownItems = knownProjectPatterns.flatMap((pattern) => rawText.match(pattern) || []);
+  const shortItems = rawText
+    .split(/[、,，;；\n。！？\s]+/)
+    .map((item) =>
+      item
+        .replace(/^【.*?】/, '')
+        .replace(/^(本阶段|本学期|学习内容|家长报告描述|家长报告|整体来看|后续可以|后续可|我们|围绕|通过|同时|又)/, '')
+        .replace(/(展开|进行|认识了|学习了|接触了|训练|练习|实测).*$/, '')
+        .replace(/各类/g, '')
+        .replace(/项目$/, '任务')
+        .trim(),
+    )
+    .filter((item) => item.length >= 2 && item.length <= 24)
+    .filter((item) => !/(老师引导|家长反馈|阶段学习成果|持续学习与实践|综合输出|孩子|学员|理解|参与度|完成了|能完成|比较|较快|独立|稳定|合作|后续|课堂)/.test(item));
+
+  return uniqueProjectItems([...knownItems, ...shortItems]).slice(0, 8);
+}
+
+function splitTeacherSentences(...values) {
+  return values
+    .join('。')
+    .split(/[。！？\n]/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function findStudentAlias(form, sentences) {
+  const explicitName = form.studentName?.trim();
+  if (explicitName) return explicitName;
+
+  const aliasSentence = sentences.find((sentence) => /^[\u4e00-\u9fa5]{2,4}(能|在|参与|完成|理解|表现|可以|对)/.test(sentence));
+  const alias = aliasSentence?.match(/^([\u4e00-\u9fa5]{2,4})(?=能|在|参与|完成|理解|表现|可以|对)/)?.[1];
+  return alias && !['孩子', '学员', '老师', '课程'].includes(alias) ? alias : '孩子';
+}
+
+function extractBehaviorNotes(sentences) {
+  return sentences
+    .filter((sentence) => /(能|完成|理解|参与|合作|稳定|调试|制作|表达|复盘|加强|较快|比较快|投入)/.test(sentence))
+    .map((sentence) =>
+      sentence
+        .replace(/^(家长报告描述|学习内容总结|本学期典型课程|本学期课程列表|摘要)[:：]?/, '')
+        .trim(),
+    )
+    .filter((sentence) => sentence.length >= 6 && sentence.length <= 70)
+    .slice(0, 2);
+}
+
+function inferLearningTheme(keywords) {
+  const text = keywords.join('、');
+
+  if (/机械臂|抓举|笛卡尔|三轴/.test(text)) {
+    return {
+      topic: '机械臂结构与控制',
+      shortTopic: '机械臂类',
+      knowledge: '机械臂的运动方式、抓取结构、任务执行流程以及基础控制算法',
+      relation: '结构设计、程序控制和任务目标之间的关系',
+      review: '结构稳定性、动作顺序和程序控制',
+    };
+  }
+
+  if (/Arduino|电路|传感器|模块|灯|声|电机/.test(text)) {
+    return {
+      topic: '电子模块与程序控制',
+      shortTopic: '电子创客',
+      knowledge: '基础电路连接、模块功能、传感器反馈和程序控制逻辑',
+      relation: '硬件连接、程序指令和实际效果之间的关系',
+      review: '连接稳定性、程序顺序和问题排查',
+    };
+  }
+
+  if (/三维|建模|模型|打印|结构|尺寸/.test(text)) {
+    return {
+      topic: '三维建模与结构设计',
+      shortTopic: '三维设计',
+      knowledge: '空间结构、工具操作、尺寸意识和模型优化方法',
+      relation: '设计想法、模型结构和实际成品之间的关系',
+      review: '比例关系、结构合理性和细节表达',
+    };
+  }
+
+  return {
+    topic: '项目任务与创客实践',
+    shortTopic: '创客项目',
+    knowledge: '任务理解、方案设计、动手操作和基础调试方法',
+    relation: '项目目标、操作步骤和作品效果之间的关系',
+    review: '任务规划、操作细节和复盘表达',
+  };
+}
+
+function formatKeywordSummary(keywords) {
+  return keywords.join('、');
+}
+
+function hasConcreteBehavior(sentences) {
+  return sentences.some((sentence) => /(在.+(?:项目|任务|挑战)|完成|制作|调试|结构稳定|控制方式|参与度|合作项目|复盘|表达)/.test(sentence));
+}
+
 export default function App() {
-  const [view, setView] = useState('assessment');
+  const [route, setRoute] = useState(getRouteFromLocation);
   const [form, setForm] = useState(initialForm);
   const [scores, setScores] = useState(() => createEmptyScores(getAbilityDimensions(initialForm.courseSystem)));
   const [records, setRecords] = useState(loadRecords);
@@ -159,10 +278,28 @@ export default function App() {
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [searchName, setSearchName] = useState('');
   const [notice, setNotice] = useState('');
-  const [copied, setCopied] = useState(false);
-  const [reportMode, setReportMode] = useState('full');
-  const [comparisonMode, setComparisonMode] = useState('none');
-  const [customComparisonId, setCustomComparisonId] = useState('');
+  const [summaryPolishStatus, setSummaryPolishStatus] = useState('idle');
+  const [summaryPolishHint, setSummaryPolishHint] = useState('');
+  const [highlightPhoto, setHighlightPhoto] = useState(null);
+  const [highlightPhotoNotice, setHighlightPhotoNotice] = useState('');
+  const highlightPhotoDragRef = useRef(null);
+
+  useEffect(() => {
+    function handlePopState() {
+      setRoute(getRouteFromLocation());
+      window.scrollTo(0, 0);
+    }
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  function navigateTo(path) {
+    const nextRoute = normalizeRoute(path);
+    window.history.pushState({}, '', getUrlForRoute(nextRoute));
+    setRoute(nextRoute);
+    window.scrollTo(0, 0);
+  }
 
   const currentDimensions = useMemo(() => getAbilityDimensions(form.courseSystem), [form.courseSystem]);
   const currentAssessment = useMemo(
@@ -178,39 +315,13 @@ export default function App() {
       projects.filter((project) => {
         const matchesGrade = !form.grade || project.applicableGrade === form.grade;
         const matchesSystem = !form.courseSystem || project.courseSystem === form.courseSystem;
-        const matchesFormat = !form.courseFormat || project.courseFormat === form.courseFormat;
-        return matchesGrade && matchesSystem && matchesFormat;
+        return matchesGrade && matchesSystem;
       }),
-    [form.courseFormat, form.courseSystem, form.grade, projects],
+    [form.courseSystem, form.grade, projects],
   );
-  const studentHistory = useMemo(() => {
-    const name = form.studentName.trim();
-    if (!name) return [];
-    return sortAssessmentRecords(records.filter((record) => (record.form?.studentName || '').trim() === name));
-  }, [form.studentName, records]);
-  const latestComparisonRecord = useMemo(() => studentHistory[0] || null, [studentHistory]);
-  const comparisonRecord = useMemo(() => {
-    if (!studentHistory.length || comparisonMode === 'none') return null;
-    if (previousComparisonModes.has(comparisonMode)) return latestComparisonRecord;
-    return studentHistory.find((record) => record.id === customComparisonId) || null;
-  }, [comparisonMode, customComparisonId, latestComparisonRecord, studentHistory]);
-  const comparisonAnalysis = useMemo(
-    () => getComparisonAnalysis(scores, currentDimensions, comparisonRecord),
-    [scores, currentDimensions, comparisonRecord],
-  );
-  const comparisonAssessment = useMemo(
-    () => (comparisonAnalysis?.isFullMatch ? comparisonAnalysis : null),
-    [comparisonAnalysis],
-  );
-  const comparisonWarning =
-    comparisonMode !== 'none' && comparisonRecord && !comparisonAnalysis
-      ? '历史记录维度不一致，仅显示本次测评。'
-      : comparisonMode !== 'none' && comparisonRecord && comparisonAnalysis && !comparisonAnalysis.isFullMatch
-        ? '历史记录只匹配到部分维度，仅显示本次测评。'
-      : '';
   const report = useMemo(
-    () => generateReport(form, scores, currentDimensions, comparisonAssessment),
-    [form, scores, currentDimensions, comparisonAssessment],
+    () => generateReport(form, scores, currentDimensions, null),
+    [form, scores, currentDimensions],
   );
   const filteredRecords = useMemo(() => {
     const keyword = searchName.trim().toLowerCase();
@@ -225,16 +336,6 @@ export default function App() {
     });
   }
 
-  function updateStageObservation(field, value) {
-    setForm((current) => ({
-      ...current,
-      stageObservation: {
-        ...current.stageObservation,
-        [field]: value,
-      },
-    }));
-  }
-
   function updateStageDate(field, value) {
     setForm((current) => {
       const next = { ...current, [field]: value };
@@ -245,27 +346,11 @@ export default function App() {
     });
   }
 
-  function updateCourseSystem(value) {
-    if (form.courseSystem && value !== form.courseSystem) {
-      const ok = window.confirm('切换课程体系后，当前能力评分会重置。确认切换吗？');
-      if (!ok) return;
+  function updateProjectField(field, value) {
+    if (field === 'projectParentReportDescription') {
+      setSummaryPolishHint('');
     }
 
-    setForm((current) => ({
-      ...clearSelectedProjectFields(current),
-      courseSystem: value,
-    }));
-    setScores(createEmptyScores(getAbilityDimensions(value)));
-  }
-
-  function updateCourseFormat(value) {
-    setForm((current) => ({
-      ...clearSelectedProjectFields(current),
-      courseFormat: value,
-    }));
-  }
-
-  function updateProjectField(field, value) {
     setForm((current) => ({
       ...current,
       [field]: value,
@@ -295,26 +380,195 @@ export default function App() {
     setScores((current) => ({ ...current, [key]: value }));
   }
 
+  function handleHighlightPhotoChange(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    setHighlightPhotoNotice('');
+
+    if (!file) return;
+
+    const isHeic = /\.(heic|heif)$/i.test(file.name) || /hei[cf]/i.test(file.type);
+    if (isHeic) {
+      setHighlightPhoto(null);
+      setHighlightPhotoNotice('电脑端可能无法预览 iPhone 原图 HEIC，建议用手机端上传或转为 JPG。');
+      return;
+    }
+
+    if (!/image\/(jpeg|png|webp)/i.test(file.type)) {
+      setHighlightPhotoNotice('请上传 JPG、PNG 或 WEBP 格式的图片。');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      const image = new Image();
+      image.onload = () => {
+        setHighlightPhoto({
+          dataUrl,
+          name: file.name,
+          orientation: image.naturalWidth >= image.naturalHeight ? 'landscape' : 'portrait',
+          naturalWidth: image.naturalWidth,
+          naturalHeight: image.naturalHeight,
+          crop: defaultReportPhotoCrop,
+        });
+      };
+      image.onerror = () => setHighlightPhotoNotice('图片预览失败，请重新选择 JPG、PNG 或 WEBP 图片。');
+      image.src = dataUrl;
+    };
+    reader.onerror = () => setHighlightPhotoNotice('图片读取失败，请重新选择。');
+    reader.readAsDataURL(file);
+  }
+
+  function clearHighlightPhoto() {
+    setHighlightPhoto(null);
+    setHighlightPhotoNotice('');
+    highlightPhotoDragRef.current = null;
+  }
+
+  function updateHighlightPhotoCrop(nextCrop) {
+    setHighlightPhoto((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        crop: normalizeReportPhotoCrop({
+          ...(current.crop || defaultReportPhotoCrop),
+          ...nextCrop,
+        }),
+      };
+    });
+  }
+
+  function resizeHighlightPhoto(delta) {
+    setHighlightPhoto((current) => {
+      if (!current) return current;
+      const crop = normalizeReportPhotoCrop(current.crop || defaultReportPhotoCrop);
+      return {
+        ...current,
+        crop: normalizeReportPhotoCrop({
+          ...crop,
+          scale: crop.scale + delta,
+        }),
+      };
+    });
+  }
+
+  function resetHighlightPhotoCrop() {
+    updateHighlightPhotoCrop(defaultReportPhotoCrop);
+  }
+
+  function startHighlightPhotoDrag(event) {
+    if (!highlightPhoto) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const crop = normalizeReportPhotoCrop(highlightPhoto.crop || defaultReportPhotoCrop);
+    highlightPhotoDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startOffsetX: crop.offsetX,
+      startOffsetY: crop.offsetY,
+      width: bounds.width || 1,
+      height: bounds.height || 1,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function moveHighlightPhotoDrag(event) {
+    const drag = highlightPhotoDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const offsetX = drag.startOffsetX + ((event.clientX - drag.startX) / drag.width) * 100;
+    const offsetY = drag.startOffsetY + ((event.clientY - drag.startY) / drag.height) * 100;
+    updateHighlightPhotoCrop({ offsetX, offsetY });
+  }
+
+  function endHighlightPhotoDrag(event) {
+    if (highlightPhotoDragRef.current?.pointerId === event.pointerId) {
+      highlightPhotoDragRef.current = null;
+    }
+  }
+
+  function handlePolishLearningSummary() {
+    setSummaryPolishStatus('working');
+    setSummaryPolishHint('');
+
+    window.setTimeout(() => {
+      setForm((current) => {
+        const dimensions = getAbilityDimensions(current.courseSystem);
+        const scoreSummary = getScoreSummary(scores, dimensions);
+        const teacherSentences = splitTeacherSentences(
+          current.projectName,
+          current.projectLearningContent,
+          current.projectParentReportDescription,
+        );
+        const keywords = collectSummaryKeywords(
+          current.projectName,
+          current.projectLearningContent,
+          current.projectParentReportDescription,
+        );
+        const theme = inferLearningTheme(keywords);
+        const keywordText = keywords.length ? formatKeywordSummary(keywords) : current.projectName.trim();
+        const studentAlias = findStudentAlias(current, teacherSentences);
+        const behaviorNotes = extractBehaviorNotes(teacherSentences);
+        const hasDetails = hasConcreteBehavior(teacherSentences);
+        const strengthsText = scoreSummary.strengths.slice(0, 2).map((item) => item.label).join('、');
+        const improvementsText = scoreSummary.improvements.slice(0, 2).map((item) => item.label).join('、');
+        const representativeProject = keywords.find((item) => /项目|挑战|任务|机械臂|运输|笛卡尔/.test(item)) || theme.shortTopic;
+        const behaviorText = behaviorNotes.length ? behaviorNotes.join('；') : '';
+        const strengthSentence = strengthsText ? `也能看出${strengthsText}方面有一些比较稳定的基础` : '课堂中能跟上任务节奏';
+        const improvementSentence = improvementsText
+          ? `后续可以继续加强${improvementsText}，尤其是完成作品后的复盘表达`
+          : `后续可以继续加强调试和复盘表达`;
+
+        const polishedProjectName = keywordText || current.projectName;
+        const learningContent = `本阶段课程主要围绕${theme.topic}展开，重点接触了${keywords.slice(0, 3).join('、') || theme.shortTopic}等内容。学习过程中，孩子逐步理解了${theme.knowledge}，也开始把${theme.relation}联系起来。`;
+        const parentDescription = hasDetails
+          ? `这学期${studentAlias}在${representativeProject}相关任务中有比较具体的表现：${behaviorText}。从这些细节能看出，${studentAlias}对${theme.review}有了更实际的理解，${strengthSentence}。${improvementSentence}，把“为什么这样做、哪里还能改”说得更清楚。`
+          : `本阶段可以看出${studentAlias}对${theme.topic}相关内容接受较快，课堂中能较快理解任务要求并跟上操作节奏。${improvementSentence}，如果能结合一个具体项目说明自己的设计思路和调整过程，反馈会更有说服力。`;
+
+        setSummaryPolishHint(
+          hasDetails
+            ? ''
+            : '建议补充一个具体项目或课堂表现，生成的家长反馈会更有针对性。',
+        );
+
+        return {
+          ...current,
+          projectName: polishedProjectName || current.projectName,
+          projectLearningContent: learningContent,
+          projectParentReportDescription: parentDescription,
+        };
+      });
+      setSummaryPolishStatus('done');
+    }, 300);
+  }
+
   function handleSave() {
+    const requiredFieldsMissing =
+      !form.studentName.trim() || !form.grade || !form.projectParentReportDescription.trim();
+
+    if (requiredFieldsMissing) {
+      setNotice('请先填写学员姓名、年级和学习报告内容，再生成分享卡片。');
+      return;
+    }
+
     const normalizedForm = {
       ...form,
+      startDate: form.stageStartDate,
+      endDate: form.stageEndDate,
       assessmentDate: form.stageEndDate || form.stageStartDate || form.assessmentDate,
     };
-    const record = createRecord(normalizedForm, currentAssessment, report, comparisonAssessment);
+    const record = createRecord(normalizedForm, currentAssessment, report, null);
     const nextRecords = saveRecord(record);
     setRecords(nextRecords);
     setSelectedRecord(record);
-    setCopied(false);
-    setReportMode('full');
-    setNotice('保存成功，可在历史测评记录中查看。');
-    setView('report');
+    setNotice('');
+    navigateTo('/report/preview');
   }
 
   function handleOpenReport(record) {
     setSelectedRecord(record);
-    setCopied(false);
-    setReportMode('full');
-    setView('report');
+    setHighlightPhoto(null);
+    navigateTo('/report/preview');
   }
 
   function handleDelete(recordId) {
@@ -326,7 +580,7 @@ export default function App() {
     setRecords(nextRecords);
     if (selectedRecord?.id === recordId) {
       setSelectedRecord(null);
-      setView('history');
+      navigateTo('/history');
     }
     setNotice('记录已删除。');
   }
@@ -363,302 +617,208 @@ export default function App() {
     setNotice('试听课记录已删除。');
   }
 
-  async function copyReportText(text) {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-    } catch {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      setCopied(true);
-    }
+  function renderHome() {
+    return (
+      <section className="homeDashboard">
+        <HomeHeader />
+        <FeatureCards onNavigate={navigateTo} />
+        <SecondaryMenu onNavigate={navigateTo} />
+      </section>
+    );
   }
 
-  function renderAssessment() {
+  function renderReportBuilder() {
+    const selectedProjectCount = Array.isArray(form.projectIds) ? form.projectIds.length : form.projectId ? 1 : 0;
+
     return (
-      <>
-        <section className="hero">
-          <div>
-            <div className="eyebrow">
-              <BookOpenCheck size={18} />
-              AIGO Maker Assessment
-            </div>
-            <h1>AIGO 阶段成果与能力报告系统</h1>
-            <p>记录学员阶段学习表现，生成能力画像、成果描述与家长报告，并通过能力测试实验室补充专项测评依据。</p>
+      <section className="reportBuilderPage">
+        <section className="reportBuilderModule">
+          <div className="panelHeader">
+            <h2>学员基础信息</h2>
+            <span>阶段报告</span>
           </div>
-          <div className="heroActions">
-            <div className="heroStats" aria-label="测评概览">
-              <span>当前平均得分</span>
-              <strong>{summary.average.toFixed(1)}</strong>
-              <small>满分 5 分 · {currentDimensions.length} 个能力维度</small>
-            </div>
-            <button className="trialPrimaryEntry" type="button" onClick={() => setView('trialClass')}>
-              <MessageSquareText size={20} />
-              试听课学习反馈
-            </button>
-            <button
-              className="secondaryButton light"
-              type="button"
-              onClick={() => document.querySelector('.layout')?.scrollIntoView({ behavior: 'smooth' })}
-            >
-              <BookOpenCheck size={18} />
-              阶段学习成果与能力报告
-            </button>
-            <button className="secondaryButton light" type="button" onClick={() => setView('history')}>
-              <History size={18} />
-              历史测评记录
-            </button>
-            <button className="secondaryButton light" type="button" onClick={() => setView('projects')}>
-              <FolderKanban size={18} />
-              项目资料库
-            </button>
-            <button className="secondaryButton light" type="button" onClick={() => setView('robotDemo')}>
-              <Bot size={18} />
-              机器人专项能力测试 Demo
-            </button>
-          </div>
-        </section>
 
-        <section className="experienceNotice" aria-label="体验版说明">
-          <Database size={18} />
-          <div>
-            <strong>当前为测试体验版，数据仅保存在当前浏览器中。</strong>
-            <span>请生成卡片后及时导出 PNG 图片保存，暂不支持多设备同步和多人共享记录。</span>
-          </div>
-        </section>
-
-        <section className="layout">
-          <div className="panel formPanel">
-            <div className="panelHeader">
-              <h2>学员信息</h2>
-              <span>基础资料</span>
-            </div>
-
-            <div className="formGrid">
-              <label>
-                学员姓名
-                <input
-                  value={form.studentName}
-                  onChange={(event) => updateForm('studentName', event.target.value)}
-                  placeholder="请输入姓名"
-                />
-              </label>
-              <label>
-                年级
-                <select value={form.grade} onChange={(event) => updateForm('grade', event.target.value)}>
-                  <option value="">请选择年级</option>
-                  {grades.map((grade) => (
-                    <option key={grade} value={grade}>
-                      {grade}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                课程体系
-                <select value={form.courseSystem} onChange={(event) => updateCourseSystem(event.target.value)}>
-                  <option value="">请选择课程体系</option>
-                  {courseSystems.map((system) => (
-                    <option key={system} value={system}>
-                      {system}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                课程类型
-                <select value={form.courseFormat} onChange={(event) => updateCourseFormat(event.target.value)}>
-                  <option value="">请选择课程类型</option>
-                  {courseFormats.map((format) => (
-                    <option key={format} value={format}>
-                      {format}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                开始日期
-                <input
-                  type="date"
-                  value={form.stageStartDate}
-                  onChange={(event) => updateStageDate('stageStartDate', event.target.value)}
-                />
-              </label>
-              <label>
-                结束日期
-                <input
-                  type="date"
-                  value={form.stageEndDate}
-                  onChange={(event) => updateStageDate('stageEndDate', event.target.value)}
-                />
-              </label>
-              <label>
-                授课老师
-                <input
-                  value={form.teacher}
-                  onChange={(event) => updateForm('teacher', event.target.value)}
-                  placeholder="请输入老师姓名"
-                />
-              </label>
-            </div>
-
-            <div className="projectSection">
-              <div className="panelHeader compact">
-                <h2>本阶段学习内容</h2>
-                <span>
-                  {availableProjects.length
-                    ? `${availableProjects.length} 个匹配内容 · 已选 ${
-                        Array.isArray(form.projectIds) ? form.projectIds.length : form.projectId ? 1 : 0
-                      }`
-                    : '项目资料库'}
-                </span>
+          <div className="formGrid reportBasicGrid">
+            <label>
+              姓名
+              <input
+                value={form.studentName}
+                onChange={(event) => updateForm('studentName', event.target.value)}
+                placeholder="请输入学员姓名"
+              />
+            </label>
+            <label>
+              年级
+              <select value={form.grade} onChange={(event) => updateForm('grade', event.target.value)}>
+                <option value="">请选择年级</option>
+                {grades.map((grade) => (
+                  <option key={grade} value={grade}>
+                    {grade}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              授课老师
+              <input
+                value={form.teacher}
+                onChange={(event) => updateForm('teacher', event.target.value)}
+                placeholder="请输入授课老师姓名"
+              />
+            </label>
+            <div className="learningPeriodField">
+              学习周期
+              <div>
+                <label>
+                  开始日期
+                  <input
+                    type="date"
+                    value={form.stageStartDate}
+                    onChange={(event) => updateStageDate('stageStartDate', event.target.value)}
+                  />
+                </label>
+                <label>
+                  结束日期
+                  <input
+                    type="date"
+                    value={form.stageEndDate}
+                    onChange={(event) => updateStageDate('stageEndDate', event.target.value)}
+                  />
+                </label>
               </div>
-              <div className="projectMultiSelect" aria-label="本阶段学习内容多选">
-                {availableProjects.map((project) => {
-                  const selectedProjectIds = Array.isArray(form.projectIds)
-                    ? form.projectIds
-                    : form.projectId
-                      ? [form.projectId]
-                      : [];
-                  const isSelected = selectedProjectIds.includes(project.id);
-                  return (
-                    <button
-                      className={`projectSelectOption ${isSelected ? 'active' : ''}`}
-                      key={project.id}
-                      type="button"
-                      onClick={() => handleProjectToggle(project.id)}
-                    >
-                      <strong>{project.projectName}</strong>
-                      <span>{project.learningContent || '暂无学习内容描述'}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {!availableProjects.length && (
-                <div className="comparisonNotice">暂无匹配项目，可以进入项目资料库新增或调整筛选条件。</div>
-              )}
-              <label>
-                本阶段内容摘要，可修改
-                <input
-                  value={form.projectName}
-                  onChange={(event) => updateProjectField('projectName', event.target.value)}
-                  placeholder="选择学习内容后自动汇总，也可以手动填写"
-                />
-              </label>
-              <label>
-                学习内容
-                <textarea
-                  value={form.projectLearningContent}
-                  onChange={(event) => updateProjectField('projectLearningContent', event.target.value)}
-                  placeholder="选择学习内容后自动汇总学习内容"
-                />
-              </label>
-              <label>
-                对应能力
-                <textarea
-                  value={form.projectAbilities}
-                  onChange={(event) => updateProjectField('projectAbilities', event.target.value)}
-                  placeholder="选择学习内容后自动汇总对应能力"
-                />
-              </label>
-              <label>
-                阶段成果描述
-                <textarea
-                  value={form.projectStageOutcome}
-                  onChange={(event) => updateProjectField('projectStageOutcome', event.target.value)}
-                  placeholder="选择学习内容后自动汇总阶段成果描述"
-                />
-              </label>
-              <label>
-                家长报告描述
-                <textarea
-                  value={form.projectParentReportDescription}
-                  onChange={(event) => updateProjectField('projectParentReportDescription', event.target.value)}
-                  placeholder="选择学习内容后自动汇总家长报告描述"
-                />
-              </label>
             </div>
-
-            <div className="comparisonSection">
-              <div className="panelHeader compact">
-                <h2>阶段对比</h2>
-                <span>{studentHistory.length ? `${studentHistory.length} 条历史记录` : '成长基线'}</span>
+            <div className="highlightPhotoField">
+              <div>
+                <strong>本学期靓照</strong>
+                <span>上传一张本学期最有代表性的课堂照片或作品照片，横版、竖版均可。</span>
               </div>
-              {!form.studentName.trim() ? (
-                <div className="comparisonNotice">填写学员姓名后，系统会自动查找历史测评记录。</div>
-              ) : !studentHistory.length ? (
-                <div className="comparisonNotice">当前为首次测评，将作为后续成长对比基线。</div>
-              ) : (
-                <div className="comparisonControls">
-                  <label>
-                    对比测评记录
-                    <select value={comparisonMode} onChange={(event) => setComparisonMode(event.target.value)}>
-                      <option value="none">不对比，仅生成本次报告</option>
-                      <option value="previous">与上一次测评对比</option>
-                      <option value="custom">选择某一次历史测评对比</option>
-                    </select>
-                  </label>
-                  {comparisonMode === 'custom' && (
-                    <label>
-                      历史测评
-                      <select value={customComparisonId} onChange={(event) => setCustomComparisonId(event.target.value)}>
-                        <option value="">请选择历史测评</option>
-                        {studentHistory.map((record) => (
-                          <option key={record.id} value={record.id}>
-                            {getStageTimeText(record.form) || '未填写阶段时间'} ·{' '}
-                            {record.form?.courseSystem || '旧版课程'} · 平均分{' '}
-                            {getScoreSummary(record.scores, record.dimensions).average.toFixed(1)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  {comparisonAssessment && (
-                    <div className="comparisonSummary">
-                      本次 {comparisonAssessment.currentAverage.toFixed(1)} 分，上次{' '}
-                      {comparisonAssessment.previousAverage.toFixed(1)} 分，变化{' '}
-                      {comparisonAssessment.averageChange >= 0 ? '+' : ''}
-                      {comparisonAssessment.averageChange.toFixed(1)} 分。
+              <label className="photoUploadButton">
+                上传照片
+                <input accept="image/jpeg,image/png,image/webp,.heic,.heif" type="file" onChange={handleHighlightPhotoChange} />
+              </label>
+              {highlightPhoto && (
+                <div className="highlightPhotoCropEditor">
+                  <div className="highlightPhotoCropHeader">
+                    <div>
+                      <strong>本学期靓照调整</strong>
+                      <span>拖动照片调整显示区域，可适当放大或缩小。</span>
                     </div>
-                  )}
-                  {comparisonWarning && <div className="comparisonNotice">{comparisonWarning}</div>}
+                    <button className="secondaryButton" type="button" onClick={clearHighlightPhoto}>
+                      删除照片
+                    </button>
+                  </div>
+                  <ReportPhotoFrame
+                    alt="本学期靓照调整预览"
+                    className="highlightPhotoCropViewport"
+                    interactive
+                    onPointerCancel={endHighlightPhotoDrag}
+                    onPointerDown={startHighlightPhotoDrag}
+                    onPointerMove={moveHighlightPhotoDrag}
+                    onPointerUp={endHighlightPhotoDrag}
+                    photo={highlightPhoto}
+                  />
+                  <div className="highlightPhotoCropControls">
+                    <button className="secondaryButton" type="button" onClick={() => resizeHighlightPhoto(-0.1)}>
+                      缩小
+                    </button>
+                    <button className="secondaryButton" type="button" onClick={() => resizeHighlightPhoto(0.1)}>
+                      放大
+                    </button>
+                    <button className="secondaryButton" type="button" onClick={resetHighlightPhotoCrop}>
+                      重置
+                    </button>
+                  </div>
                 </div>
               )}
+              {highlightPhotoNotice && <span className="fieldHint warning">{highlightPhotoNotice}</span>}
             </div>
+          </div>
+        </section>
 
-            <div className="observationSection">
-              <div className="panelHeader compact">
-                <h2>阶段观察依据</h2>
-                <span>可选补充</span>
-              </div>
-              <label>
-                测评周期
-                <input
-                  value={form.stageObservation.assessmentCycle}
-                  onChange={(event) => updateStageObservation('assessmentCycle', event.target.value)}
-                  placeholder="例如：2026春季第2阶段 / 5月阶段测评"
-                />
-              </label>
-              <label>
-                老师备注，可选
-                <input
-                  value={form.stageObservation.teacherComment}
-                  onChange={(event) => updateStageObservation('teacherComment', event.target.value)}
-                  placeholder="例如：本阶段整体投入度不错，结构搭建和任务执行有明显进步。"
-                />
-              </label>
+        <section className="reportBuilderModule">
+          <div className="panelHeader reportSummaryHeader">
+            <div>
+              <h2>学习内容 & 项目总结</h2>
+              <span>{availableProjects.length ? `${availableProjects.length} 个课程内容 · 已选 ${selectedProjectCount}` : '手动填写'}</span>
             </div>
+            <button
+              className={`summaryPolishButton ${summaryPolishStatus === 'done' ? 'done' : ''}`}
+              type="button"
+              onClick={handlePolishLearningSummary}
+              disabled={summaryPolishStatus === 'working'}
+            >
+              {summaryPolishStatus === 'working'
+                ? '正在整理...'
+                : summaryPolishStatus === 'done'
+                  ? '已整理，可继续修改'
+                  : '一键整理学习总结'}
+            </button>
+          </div>
 
-            <div className="scoreSection">
-              <div className="panelHeader compact">
-                <h2>能力评分</h2>
-                <span>1-5 分</span>
-              </div>
-              <ScoreGuide />
+          <div className="projectMultiSelect reportCourseList" aria-label="本学期课程列表">
+            {availableProjects.map((project) => {
+              const selectedProjectIds = Array.isArray(form.projectIds)
+                ? form.projectIds
+                : form.projectId
+                  ? [form.projectId]
+                  : [];
+              const isSelected = selectedProjectIds.includes(project.id);
+              return (
+                <button
+                  className={`projectSelectOption ${isSelected ? 'active' : ''}`}
+                  key={project.id}
+                  type="button"
+                  onClick={() => handleProjectToggle(project.id)}
+                >
+                  <strong>{project.projectName}</strong>
+                  <span>{project.learningContent || '暂无学习内容描述'}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {!availableProjects.length && (
+            <div className="comparisonNotice">暂无可选课程内容，可直接手动填写本学期典型课程和项目。</div>
+          )}
+
+          <div className="reportSummaryGrid">
+            <label>
+              本学期典型课程 / 项目
+              <textarea
+                value={form.projectName}
+                onChange={(event) => updateProjectField('projectName', event.target.value)}
+                placeholder="例如：三轴机械臂、笛卡尔机械臂、火星家园挑战、机械臂抓举"
+              />
+            </label>
+            <label>
+              学习内容总结
+              <textarea
+                value={form.projectLearningContent}
+                onChange={(event) => updateProjectField('projectLearningContent', event.target.value)}
+                placeholder="概括本阶段学习主题、项目任务和完成情况"
+              />
+            </label>
+            <label>
+              家长报告描述
+              <textarea
+                value={form.projectParentReportDescription}
+                onChange={(event) => updateProjectField('projectParentReportDescription', event.target.value)}
+                placeholder={`建议围绕一个具体项目来写，例如：
+在某个项目中，孩子做了什么？体现出什么能力？后续可以继续加强什么？`}
+              />
+              {summaryPolishHint && <span className="fieldHint warning">{summaryPolishHint}</span>}
+            </label>
+          </div>
+        </section>
+
+        <section className="reportBuilderModule">
+          <div className="panelHeader">
+            <h2>阶段能力雷达图 + 评价</h2>
+            <span>{currentDimensions.length} 维能力画像</span>
+          </div>
+
+          <div className="reportAbilityGrid">
+            <div className="scoreSection reportScorePanel">
               {currentDimensions.map((dimension) => (
                 <ScoreInput
                   key={getDimensionId(dimension)}
@@ -669,33 +829,35 @@ export default function App() {
               ))}
             </div>
 
-            <button className="primaryButton" type="button" onClick={handleSave}>
-              <Save size={18} />
-              保存并生成家长报告
-            </button>
-            {notice && <div className="notice">{notice}</div>}
-          </div>
-
-          <div className="panel resultPanel">
-            <div className="panelHeader">
-              <h2>实时预览</h2>
-              <span>雷达图与报告</span>
+            <div className="reportEvaluationPanel">
+              <h3>阶段能力画像</h3>
+              <RadarScoreChart currentAssessment={currentAssessment} comparisonAssessment={null} />
             </div>
-            <RadarScoreChart currentAssessment={currentAssessment} comparisonAssessment={comparisonAssessment} />
-            <ReportPreview report={report} />
+
+            <div className="reportBuilderActions">
+              <button className="primaryButton" type="button" onClick={handleSave}>
+                <Save size={18} />
+                保存并预览分享卡片
+              </button>
+              {notice && <div className="notice">{notice}</div>}
+            </div>
           </div>
         </section>
-      </>
+      </section>
     );
+  }
+
+  function renderAssessment() {
+    return renderReportBuilder();
   }
 
   function renderHistory() {
     return (
       <section className="pagePanel">
         <div className="pageTopbar">
-          <button className="secondaryButton" type="button" onClick={() => setView('assessment')}>
+          <button className="secondaryButton" type="button" onClick={() => navigateTo('/')}>
             <ArrowLeft size={18} />
-            返回测评首页
+            返回首页
           </button>
           <div>
             <span>共 {records.length} 条记录</span>
@@ -734,8 +896,8 @@ export default function App() {
             <strong>还没有可查看的报告</strong>
             <span>请先保存一条测评记录。</span>
           </div>
-          <button className="primaryButton narrow" type="button" onClick={() => setView('assessment')}>
-            返回测评首页
+          <button className="primaryButton narrow" type="button" onClick={() => navigateTo('/report')}>
+            返回报告系统
           </button>
         </section>
       );
@@ -743,75 +905,42 @@ export default function App() {
 
     return (
       <section className="reportPage">
-        <div className="reportToolbar">
-          <button className="secondaryButton" type="button" onClick={() => setView('history')}>
-            <ArrowLeft size={18} />
-            历史记录
-          </button>
-          <button className="secondaryButton" type="button" onClick={() => setView('assessment')}>
-            <FileText size={18} />
-            新建测评
-          </button>
-        </div>
         {notice && <div className="notice standalone">{notice}</div>}
-        <div className="reportModeSwitch">
-          <button
-            className={`secondaryButton ${reportMode === 'full' ? 'active' : ''}`}
-            type="button"
-            onClick={() => setReportMode('full')}
-          >
-            查看完整报告
-          </button>
-          <button
-            className={`secondaryButton ${reportMode === 'share' ? 'active' : ''}`}
-            type="button"
-            onClick={() => {
-              setCopied(false);
-              setReportMode('share');
-            }}
-          >
-            查看分享卡片
-          </button>
-        </div>
-        {reportMode === 'full' ? (
-          <ParentReport record={record} onCopy={copyReportText} copied={copied} />
-        ) : (
-          <ParentShareCard
-            record={record}
-            onBackFull={() => setReportMode('full')}
-            onCopy={copyReportText}
-            copied={copied}
-          />
-        )}
+        <ParentShareCard
+          record={record}
+          onBackEdit={() => navigateTo('/report')}
+          highlightPhoto={highlightPhoto}
+        />
       </section>
     );
   }
 
   return (
     <main className="appShell">
-      {view === 'assessment' && renderAssessment()}
-      {view === 'history' && renderHistory()}
-      {view === 'projects' && (
+      {route === '/' && renderHome()}
+      {route === '/report' && renderAssessment()}
+      {route === '/history' && renderHistory()}
+      {route === '/library' && (
         <ProjectLibrary
           projects={projects}
           notice={notice}
-          onBack={() => setView('assessment')}
+          onBack={() => navigateTo('/')}
           onSave={handleSaveProject}
           onDelete={handleDeleteProject}
         />
       )}
-      {view === 'report' && renderReport()}
-      {view === 'trialClass' && (
+      {route === '/report/preview' && renderReport()}
+      {route === '/trial' && (
         <TrialClassFeedback
           projects={projects}
           records={trialClassRecords}
           notice={notice}
-          onBack={() => setView('assessment')}
+          onBack={() => navigateTo('/')}
           onSave={handleSaveTrialClassRecord}
           onDelete={handleDeleteTrialClassRecord}
         />
       )}
-      {view === 'robotDemo' && <RobotSpecialTestDemo onBack={() => setView('assessment')} />}
+      {route === '/lab' && <RobotSpecialTestDemo onBack={() => navigateTo('/')} />}
     </main>
   );
 }

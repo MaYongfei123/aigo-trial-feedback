@@ -1,12 +1,38 @@
-import { ClipboardCopy, Download } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { useState } from 'react';
 import RadarScoreChart from './RadarScoreChart.jsx';
-import { buildShareCardReportText, getRecordDimensions, getShareCardContent } from '../utils/report.js';
+import ReportPhotoFrame from './ReportPhotoFrame.jsx';
+import { getRecordDimensions, getShareCardContent } from '../utils/report.js';
 
-export default function ParentShareCard({ record, onBackFull, onCopy, copied }) {
+function splitReportParagraphs(text = '') {
+  const manualParagraphs = text
+    .split(/\n+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (manualParagraphs.length > 1) return manualParagraphs.slice(0, 3);
+
+  const sentences = text
+    .split(/(?<=[。！？；])/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (sentences.length <= 2) return text ? [text] : [];
+
+  const paragraphCount = Math.min(3, Math.ceil(sentences.length / 2));
+  const chunkSize = Math.ceil(sentences.length / paragraphCount);
+  return Array.from({ length: paragraphCount }, (_, index) =>
+    sentences.slice(index * chunkSize, (index + 1) * chunkSize).join(''),
+  ).filter(Boolean);
+}
+
+export default function ParentShareCard({ record, onBackEdit, highlightPhoto }) {
   const content = getShareCardContent(record);
   const dimensions = getRecordDimensions(record);
+  const reportParagraphs = splitReportParagraphs(content.projectParentReportDescription);
+  const resolvedLayout = highlightPhoto?.orientation || 'no-photo';
+  const studentName = content.name && content.name !== '未命名学员' ? content.name : '';
+  const grade = content.grade && content.grade !== '未填写' ? content.grade : '';
+  const teacher = content.teacher && content.teacher !== '未填写' ? content.teacher : '';
   const [exporting, setExporting] = useState(false);
 
   function sanitizeFileName(value) {
@@ -14,8 +40,7 @@ export default function ParentShareCard({ record, onBackFull, onCopy, copied }) 
   }
 
   async function exportShareCard() {
-    const studentName = content.name.trim();
-    if (!studentName || studentName === '未命名学员') {
+    if (!studentName.trim()) {
       window.alert('请先填写学员姓名后再导出');
       return;
     }
@@ -32,7 +57,7 @@ export default function ParentShareCard({ record, onBackFull, onCopy, copied }) 
       });
 
       const link = document.createElement('a');
-      const fileName = sanitizeFileName(`${studentName}-阶段能力测评报告-${content.assessmentDate}`);
+      const fileName = sanitizeFileName(`${studentName}-阶段能力测评报告-${content.learningPeriod || '阶段报告'}`);
       link.download = `${fileName}.png`;
       link.href = dataUrl;
       link.click();
@@ -45,129 +70,93 @@ export default function ParentShareCard({ record, onBackFull, onCopy, copied }) 
 
   return (
     <section className="shareCardPage">
-      <div className="shareCard" id="parent-share-card">
+      <div className={`shareCard ${resolvedLayout}`} id="parent-share-card">
         <div className="shareCardHeader">
           <span>爱高创客</span>
           <h2>{content.comparison ? '阶段成长对比报告' : '阶段能力基线报告'}</h2>
         </div>
 
-        <div className="shareStudentRow">
-          <div>
-            <span>学员姓名</span>
-            <strong>{content.name}</strong>
-          </div>
-          <div className="shareScore">
-            <span>综合得分</span>
-            <strong>{content.score}</strong>
-          </div>
-        </div>
+        <div className={`shareReportBody ${highlightPhoto ? 'hasPhoto' : ''}`}>
+          {highlightPhoto && (
+            <ReportPhotoFrame className="sharePhoto" photo={highlightPhoto} />
+          )}
 
-        <div className="shareMetaGrid">
-          <div>
-            <span>年级</span>
-            <strong>{content.grade}</strong>
-          </div>
-          <div>
-            <span>课程体系</span>
-            <strong>{content.courseSystem}</strong>
-          </div>
-          <div>
-            <span>课程类型</span>
-            <strong>{content.courseFormat}</strong>
-          </div>
-          <div>
-            <span>阶段时间</span>
-            <strong>{content.assessmentDate}</strong>
-          </div>
-          <div>
-            <span>授课老师</span>
-            <strong>{content.teacher}</strong>
-          </div>
-        </div>
-
-        {content.cycleSummary && (
-          <div className="shareTaskSummary">
-            <span>阶段依据</span>
-            <strong>{content.cycleSummary}</strong>
-          </div>
-        )}
-
-        <div className="shareChart">
-          <RadarScoreChart
-            currentAssessment={{ scores: record.scores, dimensions }}
-            comparisonAssessment={record.comparison}
-          />
-        </div>
-
-        {content.comparison ? (
-          <div className="shareCompareBox">
-            <div>
-              <span>相比上次</span>
-              <strong>
-                {content.comparison.averageChange >= 0 ? '+' : ''}
-                {content.comparison.averageChange.toFixed(1)} 分
-              </strong>
+          <div className="shareReportContent">
+            <div className="shareStudentRow">
+              {studentName && (
+                <div>
+                  <span>学员姓名</span>
+                  <strong>{studentName}</strong>
+                </div>
+              )}
             </div>
-            <div>
-              <span>进步最大</span>
-              <strong>{content.comparison.topImprovement?.label || '整体稳定'}</strong>
+
+            <div className="shareMetaGrid">
+              {grade && (
+                <div>
+                  <span>年级</span>
+                  <strong>{grade}</strong>
+                </div>
+              )}
+              {teacher && (
+                <div>
+                  <span>授课老师</span>
+                  <strong>{teacher}</strong>
+                </div>
+              )}
             </div>
-          </div>
-        ) : content.isBalanced ? (
-          <div className="shareBalanced">
-            <h3>能力表现</h3>
-            <strong>整体表现较为均衡</strong>
-          </div>
-        ) : (
-          <div className="shareTwoColumns">
-            <div>
-              <h3>优势能力</h3>
-              <div className="shareTags">
-                {content.strengths.map((item) => (
-                  <span key={item}>{item}</span>
+
+            {content.learningPeriod && (
+              <div className="sharePeriodBlock">
+                <span>学习周期</span>
+                <strong>{content.learningPeriod}</strong>
+              </div>
+            )}
+
+            {(content.projectName || content.projectLearningContent) && (
+              <div className="shareLearningSections">
+                {content.projectName && (
+                  <section>
+                    <h3>本学期典型课程 / 项目</h3>
+                    <p>{content.projectName}</p>
+                  </section>
+                )}
+                {content.projectLearningContent && (
+                  <section>
+                    <h3>学习内容总结</h3>
+                    <p>{content.projectLearningContent}</p>
+                  </section>
+                )}
+              </div>
+            )}
+
+            <div className="shareChart">
+              <h3>阶段能力画像</h3>
+              <RadarScoreChart
+                currentAssessment={{ scores: record.scores, dimensions }}
+                comparisonAssessment={record.comparison}
+              />
+            </div>
+
+            {reportParagraphs.length > 0 && (
+              <div className="shareReportBlock">
+                <h3>学习报告</h3>
+                {reportParagraphs.map((paragraph, index) => (
+                  <p key={`${paragraph}-${index}`}>{paragraph}</p>
                 ))}
               </div>
-            </div>
-            <div>
-              <h3>待提升能力</h3>
-              <div className="shareTags muted">
-                {content.improvements.map((item) => (
-                  <span key={item}>{item}</span>
-                ))}
-              </div>
-            </div>
+            )}
           </div>
-        )}
-
-        {content.comparison?.improved?.length > 0 && (
-          <div className="shareAdvice">
-            <h3>进步维度</h3>
-            <p>{content.comparison.improved.slice(0, 3).map((item) => `${item.label}+${item.change}`).join('、')}</p>
-          </div>
-        )}
-
-        <div className="shareAdvice">
-          <h3>下一阶段建议</h3>
-          <p>{content.nextSteps}</p>
-        </div>
-
-        <div className="shareTeacherNote">
-          <h3>老师寄语</h3>
-          <p>{content.teacherMessage}</p>
         </div>
       </div>
 
       <div className="shareCardActions">
         <button className="copyButton compact" type="button" onClick={exportShareCard} disabled={exporting}>
           <Download size={18} />
-          {exporting ? '正在导出...' : '导出 PNG 图片'}
+          {exporting ? '正在生成图片…' : '导出 PNG 图片'}
         </button>
-        <button className="copyButton compact" type="button" onClick={() => onCopy(buildShareCardReportText(record))}>
-          <ClipboardCopy size={18} />
-          {copied ? '已复制文字版报告' : '复制文字版报告'}
-        </button>
-        <button className="secondaryButton" type="button" onClick={onBackFull}>
-          返回完整报告
+        <button className="secondaryButton" type="button" onClick={onBackEdit}>
+          返回修改
         </button>
       </div>
     </section>

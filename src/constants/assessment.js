@@ -48,11 +48,29 @@ export function getAssessmentTemplateName(courseSystem, courseFormat) {
   return `${courseSystem}${courseFormat}测评模板`;
 }
 
+export function normalizeCourseTypes(form = {}) {
+  if (Array.isArray(form.courseTypes)) {
+    return form.courseTypes.filter((type) => courseTypes.includes(type));
+  }
+
+  const legacyType = form.courseType || form.courseFormat || '';
+  return legacyType
+    .split(/[\/、,，]+/)
+    .map((type) => type.trim())
+    .filter((type) => courseTypes.includes(type));
+}
+
+export function formatCourseTypes(value = {}) {
+  const types = Array.isArray(value) ? value : normalizeCourseTypes(value);
+  return types.length ? types.join(' / ') : '';
+}
+
 export function normalizeCourseInfo(form = {}) {
   const legacyCourse = form.courseType || '';
   const courseSystem = form.courseSystem || (legacyCourse ? '旧版课程类型' : '');
+  const selectedCourseTypes = normalizeCourseTypes(form);
+  const courseFormat = formatCourseTypes(selectedCourseTypes);
   const abilityStage = form.abilityStage || form.courseStage || legacyCourse;
-  const courseFormat = form.courseFormat || (courseTypes.includes(form.courseType) ? form.courseType : '');
   const assessmentTemplate =
     form.assessmentTemplate ||
     getAssessmentTemplateName(courseSystem, courseFormat) ||
@@ -61,6 +79,7 @@ export function normalizeCourseInfo(form = {}) {
   return {
     courseSystem,
     abilityStage,
+    courseTypes: selectedCourseTypes,
     courseFormat,
     courseType: courseFormat,
     courseStage: abilityStage,

@@ -15,7 +15,7 @@ export default function ParentReport({ record, onCopy, copied }) {
   const summary = getScoreSummary(record.scores, dimensions);
   const form = record.form;
   const stageObservation = getStageObservation(form);
-  const stageTimeText = getStageTimeText(form) || '未填写';
+  const stageTimeText = getStageTimeText(form);
   const courseInfo = normalizeCourseInfo(form);
   const report = {
     ...record.report,
@@ -37,14 +37,12 @@ export default function ParentReport({ record, onCopy, copied }) {
           <span>课程体系</span>
           <strong>{courseInfo.courseSystem || '未填写'}</strong>
         </div>
-        <div>
-          <span>课程类型</span>
-          <strong>{courseInfo.courseFormat || '未填写'}</strong>
-        </div>
-        <div>
-          <span>阶段时间</span>
-          <strong>{stageTimeText}</strong>
-        </div>
+        {stageTimeText && (
+          <div>
+            <span>学习周期</span>
+            <strong>{stageTimeText}</strong>
+          </div>
+        )}
         <div>
           <span>年级</span>
           <strong>{form.grade || '未填写'}</strong>
@@ -99,14 +97,12 @@ export default function ParentReport({ record, onCopy, copied }) {
       {(form.projectName ||
         form.projectLearningContent ||
         form.projectAbilities ||
-        form.projectStageOutcome ||
         form.projectParentReportDescription) && (
         <div className="reportSection">
           <h3>学习依据</h3>
           {form.projectName && <p>本阶段内容摘要：{form.projectName}</p>}
           {form.projectLearningContent && <p>学习内容：{form.projectLearningContent}</p>}
           {form.projectAbilities && <p>对应能力：{form.projectAbilities}</p>}
-          {form.projectStageOutcome && <p>阶段成果：{form.projectStageOutcome}</p>}
           {form.projectParentReportDescription && <p>家长报告描述：{form.projectParentReportDescription}</p>}
         </div>
       )}

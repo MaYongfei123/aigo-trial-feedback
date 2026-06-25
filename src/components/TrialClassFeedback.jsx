@@ -116,10 +116,41 @@ function buildTrialFeedback(form, matchedProject) {
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
+    reader.onload = () => {
+      if (typeof reader.result === 'string' && reader.result.startsWith('data:image/')) {
+        resolve(reader.result);
+      } else {
+        reject(new Error('图片读取失败，请重新选择照片。'));
+      }
+    };
     reader.onerror = () => reject(new Error('图片读取失败，请重新选择照片。'));
+    reader.onabort = () => reject(new Error('图片读取已取消，请重新选择照片。'));
     reader.readAsDataURL(file);
   });
+}
+
+function getImageFileType(file) {
+  const extension = file.name.split('.').pop()?.toLowerCase() || '';
+  const mimeType = (file.type || '').toLowerCase();
+  if (mimeType.includes('heic') || mimeType.includes('heif') || extension === 'heic' || extension === 'heif') {
+    return 'heic';
+  }
+  if (
+    ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(mimeType) ||
+    ['jpg', 'jpeg', 'png', 'webp'].includes(extension)
+  ) {
+    return 'supported';
+  }
+  return 'unsupported';
+}
+
+function isPreviewDataUrl(value) {
+  return typeof value === 'string' && /^data:image\/(?:jpeg|jpg|png|webp|heic|heif);base64,/i.test(value);
+}
+
+function isIOSDevice() {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
 function loadImage(src) {
@@ -555,6 +586,7 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
   const [optimisticRecords, setOptimisticRecords] = useState([]);
   const [photoItems, setPhotoItems] = useState([]);
   const [activeCropId, setActiveCropId] = useState('');
+  const [sharePhotoErrors, setSharePhotoErrors] = useState([]);
   const photoItemsRef = useRef([]);
   const dragStateRef = useRef(null);
 
@@ -594,6 +626,60 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
   function replacePhotoItems(nextItems) {
     photoItemsRef.current = nextItems;
     setPhotoItems(nextItems);
+  }
+
+  function handlePhotoPreviewLoad(photoId) {
+    const nextItems = photoItemsRef.current.map((item) =>
+      item.id === photoId ? { ...item, previewLoaded: true, previewError: false } : item,
+    );
+    replacePhotoItems(nextItems);
+  }
+
+  function handlePhotoPreviewError(photoId, failedSrc) {
+    const target = photoItemsRef.current.find((item) => item.id === photoId);
+    if (
+      target &&
+      failedSrc === target.croppedDataUrl &&
+      target.sourceDataUrl !== target.croppedDataUrl &&
+      isPreviewDataUrl(target.sourceDataUrl)
+    ) {
+      const fallbackItems = photoItemsRef.current.map((item) =>
+        item.id === photoId
+          ? {
+              ...item,
+              croppedDataUrl: item.sourceDataUrl,
+              processing: false,
+              previewLoaded: false,
+              previewError: false,
+            }
+          : item,
+      );
+      replacePhotoItems(fallbackItems);
+      setForm((current) => ({
+        ...current,
+        photoUrls: fallbackItems.filter((item) => !item.previewError).map((item) => item.croppedDataUrl),
+      }));
+      return;
+    }
+
+    const nextItems = photoItemsRef.current.map((item) =>
+      item.id === photoId
+        ? {
+            ...item,
+            processing: false,
+            previewLoaded: false,
+            previewError: true,
+          }
+        : item,
+    );
+    replacePhotoItems(nextItems);
+    setForm((current) => ({
+      ...current,
+      photoUrls: nextItems
+        .filter((item) => !item.previewError && isPreviewDataUrl(item.croppedDataUrl))
+        .map((item) => item.croppedDataUrl),
+    }));
+    setLocalToast('图片预览失败，请重新选择 JPG/PNG 图片。');
   }
 
   async function commitPhotoCrop(photoItem) {
@@ -677,6 +763,20 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
   async function handlePhotosChange(event) {
     const availableSlots = Math.max(0, 2 - photoItemsRef.current.length);
     const selectedFiles = Array.from(event.target.files || []);
+    const heicFiles = selectedFiles.filter((file) => getImageFileType(file) === 'heic');
+    if (heicFiles.length && !isIOSDevice()) {
+      setLocalToast('电脑端暂不支持 HEIC 照片，请改用 JPG/PNG，或直接用 iPhone 打开网页上传。');
+      event.target.value = '';
+      return;
+    }
+
+    const unsupportedFiles = selectedFiles.filter((file) => getImageFileType(file) === 'unsupported');
+    if (unsupportedFiles.length) {
+      setLocalToast('图片预览失败，请重新选择 JPG/PNG 图片。');
+      event.target.value = '';
+      return;
+    }
+
     const files = selectedFiles.slice(0, availableSlots);
     if (!files.length) {
       if (selectedFiles.length) setLocalToast('当前最多上传 2 张课堂照片。');
@@ -694,6 +794,8 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
         offsetX: 0,
         offsetY: 0,
         processing: true,
+        previewLoaded: false,
+        previewError: false,
       }));
       const nextItems = [...photoItemsRef.current, ...immediateItems];
       replacePhotoItems(nextItems);
@@ -715,6 +817,8 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
                   ...processedItem,
                   id: immediateItem.id,
                   processing: false,
+                  previewLoaded: false,
+                  previewError: false,
                 }
               : item,
           );
@@ -728,7 +832,7 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
             item.id === immediateItem.id ? { ...item, processing: false } : item,
           );
           replacePhotoItems(currentItems);
-          setLocalToast('图片读取失败，请重新选择照片。');
+          setLocalToast('图片处理失败，已保留原图预览；如无法显示，请重新选择 JPG/PNG 图片。');
         }
       }
     } catch (error) {
@@ -859,6 +963,9 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
     setForm(emptyForm);
     replacePhotoItems([]);
     setActiveCropId('');
+    dragStateRef.current = null;
+    setSharePhotoErrors([]);
+    setExportPreview(null);
     setSelectedRecord(null);
     setShareCardData(null);
     setCopied(false);
@@ -871,16 +978,22 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
 
   function handleEdit(record) {
     const normalizedRecord = normalizeRecord(record);
-    const editablePhotoItems = normalizedRecord.photoUrls.map((photoUrl) => ({
+    const editablePhotoItems = normalizedRecord.photoUrls.filter(isPreviewDataUrl).map((photoUrl) => ({
       id: crypto.randomUUID(),
       sourceDataUrl: photoUrl,
       croppedDataUrl: photoUrl,
       zoom: 1,
       offsetX: 0,
       offsetY: 0,
+      processing: false,
+      previewLoaded: false,
+      previewError: false,
     }));
     replacePhotoItems(editablePhotoItems);
     setActiveCropId('');
+    dragStateRef.current = null;
+    setSharePhotoErrors([]);
+    setExportPreview(null);
     setForm({
       ...emptyForm,
       ...normalizedRecord,
@@ -912,6 +1025,8 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
 
     setSelectedRecord(normalizedRecord);
     setShareCardData(createShareCardData(normalizedRecord));
+    setSharePhotoErrors([]);
+    setExportPreview(null);
     setCopied(false);
     setMode('share');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -941,7 +1056,9 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
 
     setExporting(true);
     try {
-      const photos = Array.isArray(record.photoUrls) ? record.photoUrls : [];
+      const photos = (Array.isArray(record.photoUrls) ? record.photoUrls : [])
+        .filter(isPreviewDataUrl)
+        .filter((_, index) => !sharePhotoErrors.includes(index));
       const canvas = await createTrialShareCanvas(record, shareCardData, photos);
       const dataUrl = canvas.toDataURL('image/png');
       const blob = await canvasToPngBlob(canvas);
@@ -1071,11 +1188,26 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
           <div className="trialPhotoUploader">
             <label>
               上传课堂照片
-              <input type="file" accept="image/*" multiple onChange={handlePhotosChange} />
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif"
+                multiple
+                onChange={handlePhotosChange}
+              />
             </label>
             <div className="trialCropList">
-              {photoItems.map((photo, index) => (
-                <div className="trialCropEditor" key={photo.id}>
+              {photoItems.map((photo, index) => {
+                const previewSrc =
+                  activeCropId === photo.id && isPreviewDataUrl(photo.sourceDataUrl)
+                    ? photo.sourceDataUrl
+                    : isPreviewDataUrl(photo.croppedDataUrl)
+                      ? photo.croppedDataUrl
+                      : isPreviewDataUrl(photo.sourceDataUrl)
+                        ? photo.sourceDataUrl
+                        : '';
+
+                return (
+                  <div className="trialCropEditor" key={photo.id}>
                   <div className="trialCropHeader">
                     <strong>课堂照片 {index + 1}</strong>
                     <button className="iconButton danger" type="button" aria-label="移除照片" onClick={() => removePhoto(index)}>
@@ -1089,18 +1221,26 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
                     onPointerUp={handleCropPointerUp}
                     onPointerCancel={handleCropPointerUp}
                   >
-                    <img
-                      src={activeCropId === photo.id ? photo.sourceDataUrl : photo.croppedDataUrl}
-                      alt={`调整课堂照片 ${index + 1}`}
-                      draggable="false"
-                      style={{
-                        transform:
-                          activeCropId === photo.id
-                            ? `translate(${(photo.offsetX / cropWidth) * 100}%, ${(photo.offsetY / cropHeight) * 100}%) scale(${photo.zoom})`
-                            : 'none',
-                      }}
-                    />
-                    <span>拖动照片调整显示区域</span>
+                    {previewSrc && !photo.previewError ? (
+                      <img
+                        src={previewSrc}
+                        alt=""
+                        draggable="false"
+                        onLoad={() => handlePhotoPreviewLoad(photo.id)}
+                        onError={() => handlePhotoPreviewError(photo.id, previewSrc)}
+                        style={{
+                          transform:
+                            activeCropId === photo.id
+                              ? `translate(${(photo.offsetX / cropWidth) * 100}%, ${(photo.offsetY / cropHeight) * 100}%) scale(${photo.zoom})`
+                              : 'none',
+                        }}
+                      />
+                    ) : (
+                      <div className="trialPhotoPreviewError">图片预览失败，请重新选择 JPG/PNG 图片。</div>
+                    )}
+                    {previewSrc && !photo.previewError && (
+                      <span>{photo.processing && !photo.previewLoaded ? '正在处理照片...' : '拖动照片调整显示区域'}</span>
+                    )}
                   </div>
                   <div className="trialCropControls">
                     <button
@@ -1138,7 +1278,8 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
               {!photoItems.length && (
                 <div className="trialPhotoEmpty">
                   <ImagePlus size={22} />
@@ -1245,7 +1386,7 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
     if (!record) return renderEditor();
     const cardData = shareCardData || (record.id ? createShareCardData(record) : null);
     const abilityItems = splitTextItems(record.abilityObservation);
-    const photos = Array.isArray(record.photoUrls) ? record.photoUrls : [];
+    const photos = (Array.isArray(record.photoUrls) ? record.photoUrls : []).filter(isPreviewDataUrl).slice(0, 2);
 
     if (!cardData?.recordId) {
       return (
@@ -1269,11 +1410,28 @@ export default function TrialClassFeedback({ projects, records, notice, onBack, 
             <p>{cardData.courseName || '试听课程'} · {record.courseSystem || '创客课程'} · {cardData.lessonDate || '未填写日期'}</p>
           </div>
 
-          <div className={`trialSharePhotos ${photos.length === 1 ? 'single' : 'double'}`}>
-            {photos.slice(0, 2).map((photoUrl, index) => (
-              <img key={`${photoUrl.slice(0, 32)}-${index}`} src={photoUrl} alt={`课堂照片 ${index + 1}`} />
-            ))}
-          </div>
+          {photos.length > 0 && (
+            <div className={`trialSharePhotos ${photos.length === 1 ? 'single' : 'double'}`}>
+              {photos.map((photoUrl, index) =>
+                sharePhotoErrors.includes(index) ? (
+                  <div className="trialPhotoPreviewError" key={`photo-error-${index}`}>
+                    图片预览失败，请重新选择 JPG/PNG 图片。
+                  </div>
+                ) : (
+                  <img
+                    key={`${photoUrl.slice(0, 32)}-${index}`}
+                    src={photoUrl}
+                    alt=""
+                    onLoad={() => setSharePhotoErrors((current) => current.filter((item) => item !== index))}
+                    onError={() => {
+                      setSharePhotoErrors((current) => (current.includes(index) ? current : [...current, index]));
+                      setLocalToast('图片预览失败，请重新选择 JPG/PNG 图片。');
+                    }}
+                  />
+                ),
+              )}
+            </div>
+          )}
           {photos.length > 2 && <div className="trialPhotoLimitNotice">当前卡片最多展示 2 张照片。</div>}
 
           <div className="trialShareSections">

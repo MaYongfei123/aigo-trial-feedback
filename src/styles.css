@@ -39,6 +39,515 @@ button:disabled {
   padding: 24px;
 }
 
+.homeDashboard {
+  display: grid;
+  gap: 18px;
+  width: min(100%, 1180px);
+  margin: 0 auto;
+}
+
+.homeHeader {
+  display: grid;
+  gap: 10px;
+  padding: 22px 20px;
+  color: #ffffff;
+  background:
+    linear-gradient(135deg, rgba(19, 68, 121, 0.96), rgba(22, 119, 127, 0.9)),
+    url("https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?auto=format&fit=crop&w=1600&q=80");
+  background-position: center;
+  background-size: cover;
+  border-radius: 8px;
+}
+
+.homeHeader h1 {
+  margin: 0;
+  font-size: clamp(30px, 8vw, 48px);
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.homeHeader p {
+  max-width: 680px;
+  margin: 0;
+  color: #eaf6ff;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.featureCards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.featureCard {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-height: 260px;
+  padding: 20px;
+  background: #ffffff;
+  border: 1px solid #dbe7f1;
+  border-radius: 8px;
+  box-shadow: 0 14px 34px rgba(26, 57, 88, 0.08);
+}
+
+.featureCard h2 {
+  margin: 0;
+  color: #102033;
+  font-size: 23px;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.featureCard p {
+  margin: 0;
+  color: #4b6177;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.featureCard .primaryButton {
+  width: 100%;
+  margin-top: auto;
+}
+
+.featureIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  color: #ffffff;
+  border-radius: 8px;
+}
+
+.reportEntry .featureIcon {
+  background: #164a86;
+}
+
+.trialEntry .featureIcon {
+  background: #0f766e;
+}
+
+.labEntry .featureIcon {
+  background: #8a4b13;
+}
+
+.secondaryMenu {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding: 14px;
+  background: #edf5fa;
+  border: 1px solid #dbe7f1;
+  border-radius: 8px;
+}
+
+.secondaryMenu button {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 14px;
+  color: #27435f;
+  background: #ffffff;
+  border: 1px solid #d7e4ef;
+  border-radius: 6px;
+  font-weight: 800;
+}
+
+.secondaryMenu button:hover {
+  color: #0f3b70;
+  border-color: #9fc5e8;
+  box-shadow: 0 8px 22px rgba(26, 57, 88, 0.08);
+}
+
+.reportBuilderPage {
+  display: grid;
+  gap: 16px;
+  width: min(100%, 980px);
+  margin: 0 auto;
+}
+
+.reportBuilderModule {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+  background: #ffffff;
+  border: 1px solid #dbe7f1;
+  border-radius: 8px;
+  box-shadow: 0 14px 34px rgba(26, 57, 88, 0.07);
+}
+
+.reportBasicGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+}
+
+.reportBasicGrid > label:first-child,
+.reportBasicGrid > label:last-child {
+  grid-column: auto;
+}
+
+.learningPeriodField {
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  color: #24445f;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.highlightPhotoField {
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  color: #24445f;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.highlightPhotoField > div:first-child {
+  align-content: start;
+}
+
+.highlightPhotoField strong {
+  color: #24445f;
+}
+
+.highlightPhotoField span {
+  color: #6a7b8d;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.photoUploadButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 40px;
+  padding: 0 14px;
+  color: #164a86;
+  background: #eef6fd;
+  border: 1px solid #bfd7ed;
+  border-radius: 6px;
+  font-weight: 900;
+}
+
+.photoUploadButton input {
+  display: none;
+}
+
+.highlightPhotoPreview {
+  display: grid;
+  gap: 8px;
+}
+
+.highlightPhotoPreview img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border: 1px solid #dbe7f1;
+  border-radius: 8px;
+}
+
+.highlightPhotoPreview.portrait img {
+  max-width: 170px;
+  aspect-ratio: 3 / 4;
+}
+
+.highlightPhotoPreview.landscape img {
+  aspect-ratio: 16 / 9;
+}
+
+.highlightPhotoCropEditor {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 560px);
+  padding: 10px;
+  background: #f8fbfe;
+  border: 1px solid #dbe7f1;
+  border-radius: 8px;
+}
+
+.highlightPhotoCropHeader {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.highlightPhotoCropHeader > div {
+  display: grid;
+  gap: 4px;
+}
+
+.highlightPhotoCropViewport {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #eef5fc;
+  border: 1px solid #d6e4f1;
+  border-radius: 8px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.highlightPhotoCropViewport:active {
+  cursor: grabbing;
+}
+
+.reportPhotoFrame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  transform-origin: center;
+}
+
+.highlightPhotoCropControls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.highlightPhotoCropControls .secondaryButton {
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.learningPeriodField > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(100%, 620px);
+  gap: 10px;
+}
+
+.learningPeriodField label {
+  display: grid;
+  gap: 6px;
+  color: #536b82;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.reportCourseList {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.reportSummaryGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.reportSummaryHeader {
+  align-items: flex-start;
+  margin-bottom: 0;
+}
+
+.reportSummaryHeader > div {
+  display: grid;
+  gap: 4px;
+}
+
+.summaryPolishButton {
+  min-height: 42px;
+  padding: 0 14px;
+  color: #164a86;
+  background: #eef6fd;
+  border: 1px solid #bfd7ed;
+  border-radius: 6px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.summaryPolishButton:hover:not(:disabled) {
+  background: #dfeffc;
+  border-color: #91bde4;
+}
+
+.summaryPolishButton.done {
+  color: #185c36;
+  background: #edf9f2;
+  border-color: #bfe7ce;
+}
+
+.reportSummaryGrid label {
+  display: grid;
+  gap: 8px;
+  color: #24445f;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.fieldHint {
+  color: #6a7b8d;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.fieldHint.warning {
+  color: #87510b;
+  padding: 8px 10px;
+  background: #fff8e8;
+  border: 1px solid #f0d79f;
+  border-radius: 6px;
+}
+
+.reportSummaryGrid textarea {
+  min-height: 104px;
+}
+
+.reportAbilityGrid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.45fr) minmax(0, 0.55fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.reportScorePanel {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+}
+
+.reportEvaluationPanel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  background: #f8fbfe;
+  border: 1px solid #dbe7f1;
+  border-radius: 8px;
+}
+
+.reportEvaluationPanel h3 {
+  margin: 0;
+  color: #164a86;
+  font-size: 15px;
+}
+
+.reportEvaluationPanel .chartBox {
+  height: 340px;
+}
+
+.reportLiveMeta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reportLiveMeta div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  background: #f6fafe;
+  border: 1px solid #dbe7f1;
+  border-radius: 8px;
+}
+
+.reportLiveMeta span {
+  color: #6a7b8d;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.reportLiveMeta strong {
+  color: #12365d;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.reportPhotoPreview {
+  display: grid;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  justify-self: stretch;
+  padding: 0;
+  background: #f8fbfe;
+  border: 1px solid #dbe7f1;
+  border-radius: 8px;
+  max-height: 190px;
+}
+
+.reportEvaluationPanel .primaryButton {
+  width: 100%;
+}
+
+.reportPreviewWide,
+.reportLearningPreview,
+.reportBuilderActions {
+  grid-column: 1 / -1;
+}
+
+.reportLearningPreview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.reportLearningPreview .learningReportPreview {
+  grid-column: 1 / -1;
+  background: #fffdf7;
+  border-color: #eadcae;
+}
+
+.reportLearningPreview section {
+  display: grid;
+  gap: 7px;
+  align-content: start;
+  padding: 14px;
+  background: #f8fbfe;
+  border: 1px solid #dbe7f1;
+  border-radius: 8px;
+}
+
+.reportLearningPreview h3 {
+  margin: 0;
+  color: #164a86;
+  font-size: 14px;
+}
+
+.reportLearningPreview p {
+  margin: 0;
+  color: #344b63;
+  font-size: 13px;
+  line-height: 1.72;
+  overflow-wrap: anywhere;
+}
+
+.reportPreviewWide .reportGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 0;
+}
+
+.reportPreviewWide .reportBlock {
+  display: grid;
+  align-content: start;
+  min-height: 190px;
+}
+
+.reportBuilderActions {
+  display: grid;
+  gap: 10px;
+}
+
+.reportBuilderActions .primaryButton {
+  width: 100%;
+}
+
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 260px;
@@ -1048,6 +1557,20 @@ input[type="range"] {
   object-fit: cover;
   pointer-events: none;
   transform-origin: center;
+}
+
+.trialPhotoPreviewError {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 20px;
+  color: #b42318;
+  text-align: center;
+  background: #fff1f0;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.6;
 }
 
 .trialCropViewport span {
@@ -2422,7 +2945,7 @@ input[type="range"] {
 
 .shareCard {
   width: min(100%, 390px);
-  min-height: 640px;
+  min-height: 0;
   padding: 10px;
   color: #102033;
   background:
@@ -2431,6 +2954,18 @@ input[type="range"] {
   border: 1px solid #d9e6f2;
   border-radius: 8px;
   box-shadow: 0 18px 44px rgba(22, 74, 134, 0.14);
+}
+
+.shareCard.portrait {
+  width: min(100%, 390px);
+}
+
+.shareCard.no-photo {
+  width: min(100%, 390px);
+}
+
+.shareCard.landscape {
+  width: min(100%, 860px);
 }
 
 .shareCardHeader {
@@ -2455,10 +2990,41 @@ input[type="range"] {
 
 .shareStudentRow {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 90px;
-  gap: 7px;
+  grid-template-columns: 1fr;
+  gap: 6px;
   align-items: stretch;
   margin-top: 7px;
+}
+
+.shareReportBody {
+  display: grid;
+  gap: 8px;
+}
+
+.shareCard.landscape .shareReportBody.hasPhoto {
+  grid-template-columns: minmax(0, 1.05fr) minmax(330px, 0.95fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.sharePhoto {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  justify-self: stretch;
+  margin-top: 7px;
+  overflow: hidden;
+  background: #eef5fc;
+  border: 1px solid #d9e6f2;
+  border-radius: 8px;
+}
+
+.shareCard.portrait .sharePhoto {
+  max-height: 230px;
+}
+
+.shareCard.landscape .sharePhoto {
+  min-height: 0;
+  max-height: 470px;
 }
 
 .shareStudentRow > div,
@@ -2483,21 +3049,32 @@ input[type="range"] {
   font-size: 14px;
 }
 
-.shareScore {
-  justify-items: center;
-}
-
-.shareScore strong {
-  color: #164a86;
-  font-size: 31px;
-  line-height: 1;
-}
-
 .shareMetaGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
-  margin-top: 7px;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.sharePeriodBlock {
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+  padding: 7px 9px;
+  background: #f8fbfe;
+  border: 1px solid #dfe9f4;
+  border-radius: 8px;
+}
+
+.sharePeriodBlock span {
+  color: #6a7b8d;
+  font-size: 12px;
+}
+
+.sharePeriodBlock strong {
+  color: #12365d;
+  font-size: 14px;
+  line-height: 1.3;
 }
 
 .shareCourseStage {
@@ -2546,14 +3123,80 @@ input[type="range"] {
   line-height: 1.28;
 }
 
+.shareLearningSections {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.shareLearningSections section {
+  display: grid;
+  gap: 4px;
+  padding: 7px 9px;
+  background: #f8fbfe;
+  border: 1px solid #dfe9f4;
+  border-radius: 8px;
+}
+
+.shareLearningSections h3 {
+  margin: 0;
+  color: #164a86;
+  font-size: 12px;
+}
+
+.shareLearningSections p {
+  margin: 0;
+  color: #344b63;
+  font-size: 11.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .shareChart {
-  margin-top: 3px;
-  padding: 4px 0 0;
+  display: grid;
+  gap: 3px;
+  margin-top: 5px;
+  padding: 2px 0 0;
+}
+
+.shareChart h3 {
+  margin: 0;
+  color: #164a86;
+  font-size: 12px;
 }
 
 .shareCard .chartBox {
-  height: 176px;
-  min-height: 176px;
+  height: 154px;
+  min-height: 154px;
+}
+
+.shareCard.landscape .chartBox {
+  height: 142px;
+  min-height: 142px;
+}
+
+.shareReportBlock {
+  display: grid;
+  gap: 7px;
+  margin-top: 7px;
+  padding: 10px 11px;
+  background: #fffdf7;
+  border: 1px solid #eadcae;
+  border-radius: 8px;
+}
+
+.shareReportBlock h3 {
+  margin: 0;
+  color: #8a5a10;
+  font-size: 14px;
+}
+
+.shareReportBlock p {
+  margin: 0;
+  color: #2f4358;
+  font-size: 12.5px;
+  line-height: 1.68;
+  overflow-wrap: anywhere;
 }
 
 .shareTwoColumns {
@@ -2643,12 +3286,18 @@ input[type="range"] {
   margin-top: 7px;
 }
 
+.shareAdvice.highlight {
+  background: #fffdf7;
+  border-color: #eadcae;
+}
+
 .shareAdvice p,
 .shareTeacherNote p {
   margin: 0;
   color: #344b63;
   font-size: 12px;
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .shareCardActions {
@@ -2670,12 +3319,12 @@ input[type="range"] {
   padding: 0 14px;
 }
 
-.shareCardActions .secondaryButton:last-child {
-  grid-column: 1 / -1;
-}
-
 @media (max-width: 920px) {
   .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .reportAbilityGrid {
     grid-template-columns: 1fr;
   }
 
@@ -2709,6 +3358,28 @@ input[type="range"] {
   }
 }
 
+@media (min-width: 760px) {
+  .homeHeader {
+    min-height: 220px;
+    padding: 30px;
+    align-content: end;
+  }
+
+  .featureCards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .secondaryMenu {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .reportPreviewWide .reportGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 820px) {
   .appShell {
     padding: 14px;
@@ -2737,6 +3408,11 @@ input[type="range"] {
   }
 
   .formGrid,
+  .reportBasicGrid,
+  .learningPeriodField > div,
+  .reportLiveMeta,
+  .reportLearningPreview,
+  .reportPreviewWide .reportGrid,
   .reportGrid,
   .abilityRows,
   .projectLibraryLayout,
@@ -2781,6 +3457,18 @@ input[type="range"] {
   .chartBox {
     height: 320px;
   }
+
+  .shareCard.landscape {
+    width: min(100%, 390px);
+  }
+
+  .shareCard.landscape .shareReportBody.hasPhoto {
+    grid-template-columns: 1fr;
+  }
+
+  .shareCard.landscape .sharePhoto {
+    max-height: 240px;
+  }
 }
 
 @media (max-width: 430px) {
@@ -2824,7 +3512,7 @@ input[type="range"] {
   }
 
   .shareCard {
-    min-height: 620px;
+    min-height: 0;
     padding: 10px;
   }
 
@@ -2877,8 +3565,8 @@ input[type="range"] {
   }
 
   .shareCard .chartBox {
-    height: 164px;
-    min-height: 164px;
+    height: 148px;
+    min-height: 148px;
   }
 
   .shareCardHeader h2 {
