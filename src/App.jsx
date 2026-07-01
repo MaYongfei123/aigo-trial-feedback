@@ -58,7 +58,7 @@ const initialForm = {
   },
 };
 
-function createRecord(form, currentAssessment, report, comparisonAssessment) {
+function createRecord(form, currentAssessment, report, comparisonAssessment, highlightPhoto = null) {
   return {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
@@ -67,6 +67,27 @@ function createRecord(form, currentAssessment, report, comparisonAssessment) {
     dimensions: currentAssessment.dimensions,
     comparison: comparisonAssessment,
     report: { ...report },
+    highlightPhoto,
+  };
+}
+
+function getFormFromRecord(record) {
+  const recordForm = record?.form || {};
+  return {
+    ...initialForm,
+    ...recordForm,
+    projectIds: Array.isArray(recordForm.projectIds)
+      ? recordForm.projectIds
+      : recordForm.projectId
+        ? [recordForm.projectId]
+        : [],
+    stageStartDate: recordForm.stageStartDate || recordForm.startDate || '',
+    stageEndDate: recordForm.stageEndDate || recordForm.endDate || '',
+    assessmentDate: recordForm.assessmentDate || recordForm.stageEndDate || recordForm.endDate || '',
+    stageObservation: {
+      ...initialForm.stageObservation,
+      ...(recordForm.stageObservation || {}),
+    },
   };
 }
 
@@ -329,7 +350,18 @@ function getParticipationSummary(text) {
 function trimReportText(text, maxLength = 120) {
   const normalized = text.replace(/\s+/g, '').replace(/。{2,}/g, '。');
   if (normalized.length <= maxLength) return normalized;
-  return `${normalized.slice(0, maxLength - 1)}。`;
+  const sentences = normalized.split(/(?<=。)/).filter(Boolean);
+  const selected = [];
+  let length = 0;
+
+  for (const sentence of sentences) {
+    if (selected.length >= 3) break;
+    if (length + sentence.length > maxLength && selected.length >= 2) break;
+    selected.push(sentence);
+    length += sentence.length;
+  }
+
+  return selected.join('') || normalized;
 }
 
 function stripTermPrefix(text = '') {
@@ -350,33 +382,153 @@ function limitTermWordUsage(text) {
   });
 }
 
-function buildParentReportDescription({ projectText, learningText, teacherObservation, scoreProfile, studentAlias }) {
-  const projects = stripTermPrefix(projectText) || '代表性项目';
-  const cleanLearningText = stripTermPrefix(learningText);
-  const cleanObservation = stripTermPrefix(teacherObservation).replace(/[。！？]$/, '');
-  const participation = getParticipationSummary(`${cleanLearningText}。${cleanObservation}`);
-  const strengthNames = formatShortAbilityNames(scoreProfile.highestAbilities);
-  const abilityText = scoreProfile.highestScore >= 5
-    ? `从能力画像看，${studentAlias}在${strengthNames}方面表现都很突出。`
-    : scoreProfile.highestScore === 4
-      ? `从能力画像看，${studentAlias}在${strengthNames}方面表现比较稳定。`
-      : `从能力画像看，${studentAlias}正在积累${strengthNames}方面的经验。`;
-  const adviceNames = formatShortAbilityNames(scoreProfile.lowestAbilities);
-  let adviceText = '后续可以继续增加挑战难度，让这些优势迁移到更完整的项目表达中。';
-  if (scoreProfile.lowestScore <= 2 && scoreProfile.lowestAbilities.length) {
-    adviceText = `后续可以重点提升${adviceNames}，先从更小的任务步骤慢慢建立信心。`;
-  } else if (scoreProfile.lowestScore === 3 && scoreProfile.lowestAbilities.length) {
-    adviceText = `后续可以继续加强${adviceNames}，让孩子在完成作品后多说一说自己的想法。`;
-  } else if (scoreProfile.lowestScore === 4 && scoreProfile.lowestAbilities.length) {
-    adviceText = `后续可以在${adviceNames}上进一步优化，例如增加主动沟通和分工参与。`;
+function getBriefObservation(text) {
+  const cleanText = stripTermPrefix(text).replace(/[。！？]$/, '');
+  if (!cleanText) return '';
+  if (cleanText.length <= 48) return cleanText;
+  const parts = cleanText.split(/[，,；;]/).map((item) => item.trim()).filter(Boolean);
+  const selected = [];
+  let length = 0;
+
+  for (const part of parts) {
+    if (selected.length >= 2) break;
+    if (length + part.length > 56) break;
+    selected.push(part);
+    length += part.length;
   }
-  const behaviorText = cleanObservation
-    ? `${cleanObservation}。${abilityText}`
-    : `${studentAlias}在课堂中${participation || '能参与完成任务'}。${abilityText}`;
-  const participationText = participation ? `${participation}。` : '';
+
+  return selected.length ? selected.join('，') : cleanText.slice(0, 48);
+}
+
+function getSemesterPerformanceSummary(learningText, teacherObservation) {
+  const source = stripTermPrefix(`${learningText}。${teacherObservation}`).replace(/\s+/g, '');
+  const observations = [];
+
+  if (/积极|主动|投入|认真|愿意/.test(source)) {
+    observations.push('课堂参与度较高，能够积极投入任务');
+  } else if (/专注|稳定/.test(source)) {
+    observations.push('课堂状态比较稳定，能跟随课堂节奏完成任务');
+  }
+
+  if (/完成度|完成.*(高|好|不错)|作品/.test(source)) {
+    observations.push('作品完成度较好');
+  }
+
+  if (/遇到|问题|不会|无法|调整|解决|思考|尝试/.test(source)) {
+    observations.push('遇到问题时愿意观察原因并尝试调整');
+  }
+
+  if (observations.length) return uniqueProjectItems(observations).slice(0, 2).join('，');
+  if (teacherObservation) return getBriefObservation(teacherObservation);
+  return '能够参与本阶段课程任务，并逐步完成作品要求';
+}
+
+function getAbilityPracticeDescription(abilities) {
+  const labels = abilities.map((item) => item.label).join('、');
+
+  if (/程序|控制|调试|排错|策略|规划|算法|PID/.test(labels)) {
+    return '能够把任务目标、程序流程和作品运行效果联系起来';
+  }
+  if (/结构|搭建|动手|操作|造型|设计|机械臂|尺寸|建模/.test(labels)) {
+    return '在搭建、操作和作品调整中表现较主动';
+  }
+  if (/规则|理解|观察|模仿|任务执行/.test(labels)) {
+    return '能较快理解任务要求，并按照步骤推进作品任务';
+  }
+  if (/专注|任务完成|完整度/.test(labels)) {
+    return '课堂投入度和任务完成情况比较稳定';
+  }
+  if (/表达|分享|复盘|展示/.test(labels)) {
+    return '能尝试说出作品过程和自己的想法';
+  }
+  if (/合作|团队|参与度/.test(labels)) {
+    return '能参与小组任务，并配合同伴完成作品';
+  }
+
+  return '能把课堂任务和作品完成过程联系起来';
+}
+
+function buildStrengthSentence(scoreProfile, studentAlias) {
+  const strengthNames = formatShortAbilityNames(scoreProfile.highestAbilities);
+  const practice = getAbilityPracticeDescription(scoreProfile.highestAbilities);
+
+  if (scoreProfile.highestScore >= 5) {
+    return `从能力画像来看，${studentAlias}在${strengthNames}方面表现突出，${practice}。`;
+  }
+  if (scoreProfile.highestScore === 4) {
+    return `从能力画像来看，${studentAlias}在${strengthNames}方面已有较稳定基础，${practice}。`;
+  }
+  return `从能力画像来看，${studentAlias}在${strengthNames}方面正在积累经验，${practice}。`;
+}
+
+function getAbilityAdviceDetail(abilities) {
+  const labels = abilities.map((item) => item.label).join('、');
+
+  if (/表达|分享|复盘|展示/.test(labels)) {
+    return '引导孩子在作品完成后用“我做了什么、为什么这样做、哪里还能改”进行复盘表达。';
+  }
+  if (/合作|团队|参与度/.test(labels)) {
+    return '可以在小组任务中增加分工讨论和主动沟通，让孩子更多表达自己的想法并参与任务分配。';
+  }
+  if (/结构|搭建|动手|操作|造型|设计|机械臂|尺寸|建模/.test(labels)) {
+    return '可以引导孩子先观察结构稳定性，再尝试加固、调整连接方式，并说明自己的设计思路。';
+  }
+  if (/规则|理解|观察|模仿|任务执行/.test(labels)) {
+    return '可以让孩子先说清任务要求和操作步骤，再动手完成，帮助他把理解过程表达得更清楚。';
+  }
+  if (/程序|控制|调试|排错|策略|规划|算法|PID/.test(labels)) {
+    return '可以通过小任务训练，把任务目标、程序流程和运行现象对应起来，再逐步调整方案。';
+  }
+  if (/专注|任务完成|完整度/.test(labels)) {
+    return '可以通过分阶段小目标和完成后检查，帮助孩子保持投入并提升作品完成质量。';
+  }
+
+  return '可以通过更明确的小任务和课堂复盘，帮助孩子把操作过程、思考过程和作品优化联系起来。';
+}
+
+function buildNextStepSentence(scoreProfile) {
+  if (!scoreProfile.lowestAbilities.length) {
+    return '下一阶段可以在保持当前良好学习状态的基础上，尝试更开放的创作任务，引导孩子进行更多自主表达、作品优化和方案复盘。';
+  }
+
+  const adviceNames = formatShortAbilityNames(scoreProfile.lowestAbilities);
+  const adviceDetail = getAbilityAdviceDetail(scoreProfile.lowestAbilities);
+
+  if (scoreProfile.lowestScore <= 2) {
+    return `下一阶段可以重点提升${adviceNames}，${adviceDetail}`;
+  }
+  if (scoreProfile.lowestScore === 3) {
+    return `下一阶段可以继续加强${adviceNames}，${adviceDetail}`;
+  }
+  return `下一阶段可以进一步优化${adviceNames}，${adviceDetail}`;
+}
+
+function formatParentReportParagraphs(paragraphs, maxLength = 260) {
+  const normalized = paragraphs
+    .map((paragraph) => paragraph.replace(/\s+/g, '').replace(/。{2,}/g, '。'))
+    .filter(Boolean);
+  const report = normalized.join('\n\n');
+
+  if (report.replace(/\n/g, '').length <= maxLength) return report;
+
+  const shortenedFirstParagraph = normalized[0]?.split(/(?<=。)/).filter(Boolean)[0] || normalized[0];
+  return [shortenedFirstParagraph, ...normalized.slice(1)].filter(Boolean).join('\n\n');
+}
+
+function buildParentReportDescription({ projectText, learningText, teacherObservation, scoreProfile, studentAlias }) {
+  const projects = (stripTermPrefix(projectText) || '代表性项目')
+    .split('、')
+    .filter(Boolean)
+    .slice(0, 4)
+    .join('、');
+  const cleanObservation = getBriefObservation(teacherObservation);
+  const performance = getSemesterPerformanceSummary(learningText, cleanObservation);
+  const projectAbilityText = getAbilityPracticeDescription(scoreProfile.highestAbilities);
+  const firstParagraph = `${studentAlias}本学期完成了${projects}等项目，${performance}。在项目任务中，${projectAbilityText}，也能把课堂练习和作品效果逐步联系起来。`;
+  const secondParagraph = `${buildStrengthSentence(scoreProfile, studentAlias)}${buildNextStepSentence(scoreProfile)}`;
 
   return limitTermWordUsage(
-    trimReportText(`${studentAlias}本学期完成了${projects}等项目，${participationText}${behaviorText}${adviceText}`, 160),
+    formatParentReportParagraphs([firstParagraph, secondParagraph], 260),
   );
 }
 
@@ -408,6 +560,21 @@ function loadImageFromDataUrl(dataUrl) {
   });
 }
 
+function optimizePhotoDataUrl(image, maxSize = 1600) {
+  const naturalWidth = image.naturalWidth || image.width;
+  const naturalHeight = image.naturalHeight || image.height;
+  const scale = Math.min(1, maxSize / Math.max(naturalWidth, naturalHeight));
+  const width = Math.max(1, Math.round(naturalWidth * scale));
+  const height = Math.max(1, Math.round(naturalHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) return image.src;
+  context.drawImage(image, 0, 0, width, height);
+  return canvas.toDataURL('image/jpeg', 0.9);
+}
+
 async function convertHeicToJpegFile(file) {
   const heic2any = (await import('heic2any')).default;
   const converted = await heic2any({
@@ -437,12 +604,14 @@ export default function App() {
   const [projects, setProjects] = useState(loadProjects);
   const [trialClassRecords, setTrialClassRecords] = useState(loadTrialClassRecords);
   const [selectedRecord, setSelectedRecord] = useState(null);
+  const [editingRecordId, setEditingRecordId] = useState('');
   const [searchName, setSearchName] = useState('');
   const [notice, setNotice] = useState('');
   const [summaryPolishStatus, setSummaryPolishStatus] = useState('idle');
   const [summaryPolishHint, setSummaryPolishHint] = useState('');
   const [highlightPhoto, setHighlightPhoto] = useState(null);
   const [highlightPhotoNotice, setHighlightPhotoNotice] = useState('');
+  const [highlightPhotoStatus, setHighlightPhotoStatus] = useState('idle');
   const highlightPhotoDragRef = useRef(null);
 
   useEffect(() => {
@@ -559,11 +728,13 @@ export default function App() {
     const file = event.target.files?.[0];
     event.target.value = '';
     setHighlightPhotoNotice('');
+    setHighlightPhotoStatus(file ? 'processing' : 'idle');
 
     if (!file) return;
 
     if (!isLikelyImageFile(file)) {
       setHighlightPhoto(null);
+      setHighlightPhotoStatus('failed');
       setHighlightPhotoNotice('请选择常见图片文件，例如 JPG、PNG、WEBP、HEIC 或 HEIF。');
       return;
     }
@@ -588,14 +759,17 @@ export default function App() {
     try {
       const dataUrl = await readFileAsDataUrl(previewFile);
       const image = await loadImageFromDataUrl(dataUrl);
+      const optimizedDataUrl = optimizePhotoDataUrl(image);
+      const optimizedImage = await loadImageFromDataUrl(optimizedDataUrl);
       setHighlightPhoto({
-        dataUrl,
+        dataUrl: optimizedDataUrl,
         name: previewFile.name,
-        orientation: image.naturalWidth >= image.naturalHeight ? 'landscape' : 'portrait',
-        naturalWidth: image.naturalWidth,
-        naturalHeight: image.naturalHeight,
+        orientation: optimizedImage.naturalWidth >= optimizedImage.naturalHeight ? 'landscape' : 'portrait',
+        naturalWidth: optimizedImage.naturalWidth,
+        naturalHeight: optimizedImage.naturalHeight,
         crop: defaultReportPhotoCrop,
       });
+      setHighlightPhotoStatus('ready');
       setHighlightPhotoNotice(
         convertedFromHeic
           ? '已自动转换为 JPG，可继续调整照片。'
@@ -608,6 +782,7 @@ export default function App() {
         warnInDevelopment('HEIC native preview failed:', error);
       }
       setHighlightPhoto(null);
+      setHighlightPhotoStatus('failed');
       setHighlightPhotoNotice(
         isHeic
           ? '这张 iPhone 原图暂时无法自动处理。请在手机相册中打开照片，选择“分享”或“存储到文件”后再上传；也可以截图或发送到微信后保存为 JPG 再上传。'
@@ -619,6 +794,7 @@ export default function App() {
   function clearHighlightPhoto() {
     setHighlightPhoto(null);
     setHighlightPhotoNotice('');
+    setHighlightPhotoStatus('idle');
     highlightPhotoDragRef.current = null;
   }
 
@@ -728,32 +904,98 @@ export default function App() {
   }
 
   function handleSave() {
-    const requiredFieldsMissing =
-      !form.studentName.trim() || !form.grade || !form.projectParentReportDescription.trim();
+    try {
+      if (!form.studentName.trim()) {
+        setNotice('请填写学员姓名。');
+        return;
+      }
 
-    if (requiredFieldsMissing) {
-      setNotice('请先填写学员姓名、年级，并生成或填写家长报告描述，再预览分享卡片。');
-      return;
+      if (!form.grade) {
+        setNotice('请选择年级。');
+        return;
+      }
+
+      if (highlightPhotoStatus === 'processing') {
+        setNotice('请先等待照片加载完成。');
+        return;
+      }
+
+      if (highlightPhotoStatus === 'failed') {
+        setNotice('图片处理失败，请重新上传照片后再试，或先删除照片继续保存。');
+        return;
+      }
+
+      if (!form.projectParentReportDescription.trim()) {
+        setNotice('家长报告为空，请先生成或填写家长报告描述。');
+        return;
+      }
+
+      const normalizedForm = {
+        ...form,
+        startDate: form.stageStartDate,
+        endDate: form.stageEndDate,
+        assessmentDate: form.stageEndDate || form.stageStartDate || form.assessmentDate,
+      };
+      const record = createRecord(normalizedForm, currentAssessment, report, null, highlightPhoto);
+      const nextRecords = saveRecord(record);
+      setRecords(nextRecords);
+      setSelectedRecord(record);
+      setEditingRecordId(record.id);
+      setNotice('');
+      navigateTo('/report/preview');
+    } catch (error) {
+      const quotaExceeded =
+        error?.name === 'QuotaExceededError' ||
+        error?.code === 22 ||
+        /quota|exceeded|storage/i.test(error?.message || '');
+      setNotice(
+        quotaExceeded
+          ? '保存失败：浏览器本地存储空间不足。请删除部分旧记录，或重新上传一张较小的照片后再试。'
+          : '保存失败，请检查信息是否完整，或重新上传照片后再试。',
+      );
     }
-
-    const normalizedForm = {
-      ...form,
-      startDate: form.stageStartDate,
-      endDate: form.stageEndDate,
-      assessmentDate: form.stageEndDate || form.stageStartDate || form.assessmentDate,
-    };
-    const record = createRecord(normalizedForm, currentAssessment, report, null);
-    const nextRecords = saveRecord(record);
-    setRecords(nextRecords);
-    setSelectedRecord(record);
-    setNotice('');
-    navigateTo('/report/preview');
   }
 
   function handleOpenReport(record) {
     setSelectedRecord(record);
-    setHighlightPhoto(null);
+    setHighlightPhoto(record.highlightPhoto || null);
+    setHighlightPhotoStatus(record.highlightPhoto ? 'ready' : 'idle');
     navigateTo('/report/preview');
+  }
+
+  function loadRecordIntoForm(record, { copyAsNew = false } = {}) {
+    if (!record) return;
+    const nextForm = getFormFromRecord(record);
+    setForm(
+      copyAsNew
+        ? {
+            ...nextForm,
+            studentName: '',
+            projectParentReportDescription: '',
+          }
+        : nextForm,
+    );
+    setScores({
+      ...createEmptyScores(getAbilityDimensions(nextForm.grade)),
+      ...(record.scores || {}),
+    });
+    setHighlightPhoto(copyAsNew ? null : record.highlightPhoto || null);
+    setHighlightPhotoStatus(copyAsNew ? 'idle' : record.highlightPhoto ? 'ready' : 'idle');
+    setHighlightPhotoNotice('');
+    setSelectedRecord(copyAsNew ? null : record);
+    setEditingRecordId(copyAsNew ? '' : record.id || '');
+    setSummaryPolishStatus('idle');
+    setSummaryPolishHint('');
+    setNotice(copyAsNew ? '已复制通用内容，请填写新学员姓名并重新生成家长报告。' : '已载入历史记录，可继续修改后保存为新记录。');
+    navigateTo('/report');
+  }
+
+  function handleEditRecord(record = selectedRecord) {
+    loadRecordIntoForm(record, { copyAsNew: false });
+  }
+
+  function handleCopyAsNewRecord(record = selectedRecord) {
+    loadRecordIntoForm(record, { copyAsNew: true });
   }
 
   function handleDelete(recordId) {
@@ -814,6 +1056,7 @@ export default function App() {
 
   function renderReportBuilder() {
     const selectedProjectCount = Array.isArray(form.projectIds) ? form.projectIds.length : form.projectId ? 1 : 0;
+    const isHighlightPhotoProcessing = highlightPhotoStatus === 'processing';
 
     return (
       <section className="reportBuilderPage">
@@ -1033,9 +1276,9 @@ export default function App() {
           </div>
 
           <div className="reportBuilderActions">
-            <button className="primaryButton" type="button" onClick={handleSave}>
+            <button className="primaryButton" type="button" onClick={handleSave} disabled={isHighlightPhotoProcessing}>
               <Save size={18} />
-              保存并预览分享卡片
+              {isHighlightPhotoProcessing ? '图片处理中...' : '保存并预览分享卡片'}
             </button>
             {notice && <div className="notice">{notice}</div>}
           </div>
@@ -1079,7 +1322,12 @@ export default function App() {
           </div>
         </div>
 
-        <HistoryList records={filteredRecords} onOpenReport={handleOpenReport} onDelete={handleDelete} />
+        <HistoryList
+          records={filteredRecords}
+          onOpenReport={handleOpenReport}
+          onEditReport={handleEditRecord}
+          onDelete={handleDelete}
+        />
       </section>
     );
   }
@@ -1105,7 +1353,9 @@ export default function App() {
         {notice && <div className="notice standalone">{notice}</div>}
         <ParentShareCard
           record={record}
-          onBackEdit={() => navigateTo('/report')}
+          onBackHistory={() => navigateTo('/history')}
+          onBackEdit={() => handleEditRecord(record)}
+          onCopyAsNew={() => handleCopyAsNewRecord(record)}
           highlightPhoto={highlightPhoto}
         />
       </section>

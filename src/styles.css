@@ -254,7 +254,8 @@ button:disabled {
 .highlightPhotoPreview img {
   width: 100%;
   max-height: 220px;
-  object-fit: cover;
+  object-fit: contain;
+  background: #eef5fc;
   border: 1px solid #dbe7f1;
   border-radius: 8px;
 }
@@ -311,7 +312,8 @@ button:disabled {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   pointer-events: none;
   transform-origin: center;
 }
@@ -1188,7 +1190,7 @@ input[type="range"] {
 
 .historyTableHead {
   display: grid;
-  grid-template-columns: 1.25fr 0.75fr 1.1fr 1fr 0.75fr 0.8fr 70px;
+  grid-template-columns: 1.25fr 0.75fr 1.1fr 1fr 0.75fr 0.8fr 112px;
   gap: 12px;
   align-items: center;
   padding: 0 14px;
@@ -1199,7 +1201,7 @@ input[type="range"] {
 
 .historyRecord {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 70px;
+  grid-template-columns: minmax(0, 1fr) 112px;
   gap: 8px;
   align-items: stretch;
   padding: 10px;
@@ -3675,7 +3677,7 @@ input[type="range"] {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  width: min(100%, 430px);
+  width: min(100%, 560px);
 }
 
 .shareCardActions .copyButton,

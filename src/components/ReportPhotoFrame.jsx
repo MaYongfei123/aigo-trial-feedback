@@ -1,13 +1,13 @@
 export const defaultReportPhotoCrop = {
-  scale: 1.08,
+  scale: 1,
   offsetX: 0,
-  offsetY: -4,
+  offsetY: 0,
 };
 
 export function normalizeReportPhotoCrop(crop = defaultReportPhotoCrop) {
   const rawScale = crop.scale ?? crop.zoom ?? defaultReportPhotoCrop.scale;
   const scale = Math.max(1, Math.min(2.4, Number(rawScale) || defaultReportPhotoCrop.scale));
-  const maxOffset = Math.max(0, (scale - 1) * 44 + 4);
+  const maxOffset = Math.max(0, (scale - 1) * 50);
 
   return {
     scale,

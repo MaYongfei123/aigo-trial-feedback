@@ -1,8 +1,8 @@
-import { CalendarDays, Eye, Trash2, UserRound } from 'lucide-react';
+import { CalendarDays, Edit3, Eye, Trash2, UserRound } from 'lucide-react';
 import { normalizeCourseInfo } from '../constants/assessment.js';
 import { getRecordDimensions, getScoreSummary, getStageTimeText } from '../utils/report.js';
 
-export default function HistoryList({ records, onOpenReport, onDelete }) {
+export default function HistoryList({ records, onOpenReport, onEditReport, onDelete }) {
   if (!records.length) {
     return (
       <div className="emptyState">
@@ -49,6 +49,9 @@ export default function HistoryList({ records, onOpenReport, onDelete }) {
             <div className="historyActions">
               <button className="iconButton" type="button" onClick={() => onOpenReport(record)} aria-label="查看报告">
                 <Eye size={17} />
+              </button>
+              <button className="iconButton" type="button" onClick={() => onEditReport(record)} aria-label="编辑此报告">
+                <Edit3 size={17} />
               </button>
               <button className="iconButton danger" type="button" onClick={() => onDelete(record.id)} aria-label="删除记录">
                 <Trash2 size={17} />

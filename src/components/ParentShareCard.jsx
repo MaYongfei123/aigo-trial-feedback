@@ -1,4 +1,4 @@
-import { Download } from 'lucide-react';
+import { Copy, Download } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { useState } from 'react';
 import RadarScoreChart from './RadarScoreChart.jsx';
@@ -25,7 +25,7 @@ function splitReportParagraphs(text = '') {
   ).filter(Boolean);
 }
 
-export default function ParentShareCard({ record, onBackEdit, highlightPhoto }) {
+export default function ParentShareCard({ record, onBackHistory, onBackEdit, onCopyAsNew, highlightPhoto }) {
   const content = getShareCardContent(record);
   const dimensions = getRecordDimensions(record);
   const reportParagraphs = splitReportParagraphs(content.projectParentReportDescription);
@@ -138,8 +138,17 @@ export default function ParentShareCard({ record, onBackEdit, highlightPhoto }) 
           <Download size={18} />
           {exporting ? '正在生成图片…' : '导出 PNG 图片'}
         </button>
+        {onBackHistory && (
+          <button className="secondaryButton" type="button" onClick={onBackHistory}>
+            返回记录列表
+          </button>
+        )}
         <button className="secondaryButton" type="button" onClick={onBackEdit}>
           返回修改
+        </button>
+        <button className="secondaryButton" type="button" onClick={onCopyAsNew}>
+          <Copy size={18} />
+          复制为新学员报告
         </button>
       </div>
     </section>
