@@ -1,5 +1,6 @@
 import { ArrowLeft, Database, Save, Search } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import CompetitionAssessment from './components/CompetitionAssessment.jsx';
 import HistoryList from './components/HistoryList.jsx';
 import ParentShareCard from './components/ParentShareCard.jsx';
 import ProjectLibrary from './components/ProjectLibrary.jsx';
@@ -34,7 +35,7 @@ import {
   getScoreValue,
 } from './utils/report.js';
 
-const routePaths = new Set(['/', '/report', '/report/preview', '/trial', '/lab', '/history', '/library']);
+const routePaths = new Set(['/', '/report', '/report/preview', '/trial', '/competition', '/lab', '/history', '/library']);
 
 const initialForm = {
   studentName: '',
@@ -206,18 +207,6 @@ function findStudentAlias(form, sentences) {
   return alias && !['孩子', '学员', '老师', '课程'].includes(alias) ? alias : '孩子';
 }
 
-function extractBehaviorNotes(sentences) {
-  return sentences
-    .filter((sentence) => /(能|完成|理解|参与|合作|稳定|调试|制作|表达|复盘|加强|较快|比较快|投入)/.test(sentence))
-    .map((sentence) =>
-      sentence
-        .replace(/^(家长报告描述|学习内容总结|本学期典型课程|本学期课程列表|摘要)[:：]?/, '')
-        .trim(),
-    )
-    .filter((sentence) => sentence.length >= 6 && sentence.length <= 70)
-    .slice(0, 2);
-}
-
 function inferLearningTheme(keywords) {
   const text = keywords.join('、');
 
@@ -264,14 +253,166 @@ function formatKeywordSummary(keywords) {
   return keywords.join('、');
 }
 
-function hasConcreteBehavior(sentences) {
-  return sentences.some((sentence) => /(在.+(?:项目|任务|挑战)|完成|制作|调试|结构稳定|控制方式|参与度|合作项目|复盘|表达)/.test(sentence));
+function getAbilityScoreProfile(scoreEntries) {
+  const entries = scoreEntries.map((item, index) => ({
+    ...item,
+    score: Number(item.score) || 3,
+    index,
+  }));
+  const highSorted = [...entries].sort((a, b) => b.score - a.score || a.index - b.index);
+  const lowSorted = [...entries].sort((a, b) => a.score - b.score || a.index - b.index);
+  const highestAbilities = highSorted.slice(0, 2);
+  const allScoresSame = entries.every((item) => item.score === entries[0]?.score);
+  const lowestAbilities = allScoresSame
+    ? lowSorted.slice(0, 2)
+    : lowSorted.filter((item) => !highestAbilities.some((ability) => ability.key === item.key)).slice(0, 2);
+
+  return {
+    entries,
+    highestAbilities,
+    lowestAbilities,
+    highestScore: highSorted[0]?.score || 3,
+    lowestScore: lowSorted[0]?.score || 3,
+    allScoresSame,
+  };
+}
+
+function formatAbilityNames(abilities) {
+  return abilities.map((item) => item.label).join('、');
+}
+
+function filterConflictingAbilitySentences(sentences, scoreProfile) {
+  const highScoredAbilities = scoreProfile.entries.filter((item) => item.score >= 4);
+  const negativePattern = /(加强|提升|补足|短板|不足|薄弱|需要.*练习|继续关注|重点关注|待提升|不够)/;
+
+  return sentences.filter((sentence) => {
+    const mentionsHighAbility = highScoredAbilities.some((ability) => sentence.includes(ability.label));
+    return !(mentionsHighAbility && negativePattern.test(sentence));
+  });
+}
+
+function getTeacherObservationSnippet(sentences) {
+  const contentSummaryPattern = /(本阶段课程主要|学习过程中|主要围绕|重点接触|逐步理解|学习了|认识了|接触了|课程|项目名称|学习内容总结)/;
+  const observation = sentences.find(
+    (sentence) =>
+      !contentSummaryPattern.test(sentence) &&
+      /(愿意|能够|能|较快|稳定|主动|专注|完成|表达|合作|尝试|跟上|参与|坚持)/.test(sentence),
+  );
+
+  if (!observation) return '';
+  return observation.length > 42 ? `${observation.slice(0, 42)}。` : observation;
+}
+
+function buildLearningReportParagraphs(scoreProfile, studentAlias, teacherObservation) {
+  const strengthNames = formatAbilityNames(scoreProfile.highestAbilities);
+  const lowerNames = formatAbilityNames(scoreProfile.lowestAbilities);
+  const observationText = teacherObservation
+    ? `结合老师观察，${teacherObservation.replace(/[。！？]$/, '')}。`
+    : '课堂中愿意参与任务，也能在老师引导下完成阶段要求。';
+
+  if (scoreProfile.allScoresSame) {
+    if (scoreProfile.highestScore >= 5) {
+      return [
+        `结合阶段能力画像来看，${studentAlias}各项能力表现都比较突出，整体发展很均衡。${observationText}这是本阶段比较明显的优势。`,
+        `下一阶段可以提高任务开放度，引导${studentAlias}把已有优势迁移到更多作品和合作任务中，继续保持稳定投入和表达分享。`,
+      ];
+    }
+
+    if (scoreProfile.highestScore >= 4) {
+      return [
+        `结合阶段能力画像来看，${studentAlias}各项能力表现较稳定，整体基础比较扎实。${observationText}后续可以继续保持这种学习状态。`,
+        `下一阶段建议逐步增加任务综合度，让${studentAlias}在完成作品后多说一说想法、方法和调整过程，帮助能力表现更加稳定。`,
+      ];
+    }
+
+    if (scoreProfile.highestScore === 3) {
+      return [
+        `结合阶段能力画像来看，${studentAlias}各项能力处于正常发展区间，整体比较均衡。${observationText}这些表现可以作为后续继续巩固的基础。`,
+        `后续可以通过更多短任务持续观察${studentAlias}的规则理解、表达分享和任务完成情况，不急于拔高，先把稳定性建立起来。`,
+      ];
+    }
+
+    return [
+      `结合阶段能力画像来看，${studentAlias}目前各项能力还在建立中，需要更多清晰示范和正向反馈。${observationText}`,
+      `后续建议先用小步骤任务帮助${studentAlias}积累成功经验，重点关注专注参与、规则理解和完成后的简单表达。`,
+    ];
+  }
+
+  let strengthDescription = `在${strengthNames}上有一定基础`;
+  if (scoreProfile.highestScore >= 5) {
+    strengthDescription = `在${strengthNames}上表现比较突出`;
+  } else if (scoreProfile.highestScore === 4) {
+    strengthDescription = `在${strengthNames}上表现较稳定，已经有较好基础`;
+  }
+
+  let adviceDescription = `后续可围绕${lowerNames}继续巩固和观察`;
+  if (scoreProfile.lowestScore <= 2) {
+    adviceDescription = `后续可以重点引导${lowerNames}`;
+  } else if (scoreProfile.lowestScore === 3) {
+    adviceDescription = `后续可以继续引导${studentAlias}在${lowerNames}方面多做练习`;
+  } else if (scoreProfile.lowestScore >= 4) {
+    adviceDescription = `${lowerNames}也已有较好基础，后续以巩固稳定性为主`;
+  }
+
+  return [
+    `结合阶段能力画像来看，${studentAlias}${strengthDescription}。${observationText}这是本阶段比较值得肯定的成长表现。`,
+    `${adviceDescription}，例如完成作品后说一说“我做了什么、哪里最有趣、还想怎么改”，帮助孩子把过程和想法表达得更清楚。`,
+  ];
+}
+
+function isHeicImageFile(file) {
+  const extension = file.name.split('.').pop()?.toLowerCase();
+  const mimeType = file.type.toLowerCase();
+  return extension === 'heic' || extension === 'heif' || mimeType.includes('heic') || mimeType.includes('heif');
+}
+
+function isLikelyImageFile(file) {
+  return file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif)$/i.test(file.name);
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('图片读取失败'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('图片预览失败'));
+    image.src = dataUrl;
+  });
+}
+
+async function convertHeicToJpegFile(file) {
+  const heic2any = (await import('heic2any')).default;
+  const converted = await heic2any({
+    blob: file,
+    toType: 'image/jpeg',
+    quality: 0.92,
+  });
+  const jpegBlob = Array.isArray(converted) ? converted[0] : converted;
+  const jpegName = file.name.replace(/\.(heic|heif)$/i, '.jpg') || 'highlight-photo.jpg';
+  return new File([jpegBlob], jpegName, {
+    type: 'image/jpeg',
+    lastModified: Date.now(),
+  });
+}
+
+function warnInDevelopment(message, error) {
+  if (import.meta.env.DEV) {
+    console.warn(message, error);
+  }
 }
 
 export default function App() {
   const [route, setRoute] = useState(getRouteFromLocation);
   const [form, setForm] = useState(initialForm);
-  const [scores, setScores] = useState(() => createEmptyScores(getAbilityDimensions(initialForm.courseSystem)));
+  const [scores, setScores] = useState(() => createEmptyScores(getAbilityDimensions(initialForm.grade)));
   const [records, setRecords] = useState(loadRecords);
   const [projects, setProjects] = useState(loadProjects);
   const [trialClassRecords, setTrialClassRecords] = useState(loadTrialClassRecords);
@@ -301,7 +442,7 @@ export default function App() {
     window.scrollTo(0, 0);
   }
 
-  const currentDimensions = useMemo(() => getAbilityDimensions(form.courseSystem), [form.courseSystem]);
+  const currentDimensions = useMemo(() => getAbilityDimensions(form.grade), [form.grade]);
   const currentAssessment = useMemo(
     () => ({
       scores,
@@ -309,6 +450,20 @@ export default function App() {
     }),
     [scores, currentDimensions],
   );
+
+  useEffect(() => {
+    setScores((current) => {
+      const next = createEmptyScores(currentDimensions);
+      currentDimensions.forEach((dimension) => {
+        const key = getDimensionId(dimension);
+        if (current[key] !== undefined) {
+          next[key] = current[key];
+        }
+      });
+      return next;
+    });
+  }, [currentDimensions]);
+
   const summary = useMemo(() => getScoreSummary(scores, currentDimensions), [scores, currentDimensions]);
   const availableProjects = useMemo(
     () =>
@@ -380,44 +535,65 @@ export default function App() {
     setScores((current) => ({ ...current, [key]: value }));
   }
 
-  function handleHighlightPhotoChange(event) {
+  async function handleHighlightPhotoChange(event) {
     const file = event.target.files?.[0];
     event.target.value = '';
     setHighlightPhotoNotice('');
 
     if (!file) return;
 
-    const isHeic = /\.(heic|heif)$/i.test(file.name) || /hei[cf]/i.test(file.type);
+    if (!isLikelyImageFile(file)) {
+      setHighlightPhoto(null);
+      setHighlightPhotoNotice('请选择常见图片文件，例如 JPG、PNG、WEBP、HEIC 或 HEIF。');
+      return;
+    }
+
+    const isHeic = isHeicImageFile(file);
+    let previewFile = file;
+    let convertedFromHeic = false;
+
     if (isHeic) {
       setHighlightPhoto(null);
-      setHighlightPhotoNotice('电脑端可能无法预览 iPhone 原图 HEIC，建议用手机端上传或转为 JPG。');
-      return;
+      setHighlightPhotoNotice('正在处理 iPhone 原图，请稍候...');
+      try {
+        previewFile = await convertHeicToJpegFile(file);
+        convertedFromHeic = true;
+      } catch (error) {
+        warnInDevelopment('HEIC convert failed:', error);
+        setHighlightPhotoNotice('正在尝试使用浏览器直接预览原图...');
+        previewFile = file;
+      }
     }
 
-    if (!/image\/(jpeg|png|webp)/i.test(file.type)) {
-      setHighlightPhotoNotice('请上传 JPG、PNG 或 WEBP 格式的图片。');
-      return;
+    try {
+      const dataUrl = await readFileAsDataUrl(previewFile);
+      const image = await loadImageFromDataUrl(dataUrl);
+      setHighlightPhoto({
+        dataUrl,
+        name: previewFile.name,
+        orientation: image.naturalWidth >= image.naturalHeight ? 'landscape' : 'portrait',
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight,
+        crop: defaultReportPhotoCrop,
+      });
+      setHighlightPhotoNotice(
+        convertedFromHeic
+          ? '已自动转换为 JPG，可继续调整照片。'
+          : isHeic
+            ? '已使用浏览器原生预览，可继续调整照片。'
+            : '',
+      );
+    } catch (error) {
+      if (isHeic) {
+        warnInDevelopment('HEIC native preview failed:', error);
+      }
+      setHighlightPhoto(null);
+      setHighlightPhotoNotice(
+        isHeic
+          ? '这张 iPhone 原图暂时无法自动处理。请在手机相册中打开照片，选择“分享”或“存储到文件”后再上传；也可以截图或发送到微信后保存为 JPG 再上传。'
+          : '图片读取或预览失败，请尝试更换为 JPG、PNG、WEBP、HEIC 或 HEIF 图片。',
+      );
     }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      const image = new Image();
-      image.onload = () => {
-        setHighlightPhoto({
-          dataUrl,
-          name: file.name,
-          orientation: image.naturalWidth >= image.naturalHeight ? 'landscape' : 'portrait',
-          naturalWidth: image.naturalWidth,
-          naturalHeight: image.naturalHeight,
-          crop: defaultReportPhotoCrop,
-        });
-      };
-      image.onerror = () => setHighlightPhotoNotice('图片预览失败，请重新选择 JPG、PNG 或 WEBP 图片。');
-      image.src = dataUrl;
-    };
-    reader.onerror = () => setHighlightPhotoNotice('图片读取失败，请重新选择。');
-    reader.readAsDataURL(file);
   }
 
   function clearHighlightPhoto() {
@@ -493,7 +669,7 @@ export default function App() {
 
     window.setTimeout(() => {
       setForm((current) => {
-        const dimensions = getAbilityDimensions(current.courseSystem);
+        const dimensions = getAbilityDimensions(current.grade);
         const scoreSummary = getScoreSummary(scores, dimensions);
         const teacherSentences = splitTeacherSentences(
           current.projectName,
@@ -507,26 +683,18 @@ export default function App() {
         );
         const theme = inferLearningTheme(keywords);
         const keywordText = keywords.length ? formatKeywordSummary(keywords) : current.projectName.trim();
+        const scoreProfile = getAbilityScoreProfile(scoreSummary.entries);
         const studentAlias = findStudentAlias(current, teacherSentences);
-        const behaviorNotes = extractBehaviorNotes(teacherSentences);
-        const hasDetails = hasConcreteBehavior(teacherSentences);
-        const strengthsText = scoreSummary.strengths.slice(0, 2).map((item) => item.label).join('、');
-        const improvementsText = scoreSummary.improvements.slice(0, 2).map((item) => item.label).join('、');
-        const representativeProject = keywords.find((item) => /项目|挑战|任务|机械臂|运输|笛卡尔/.test(item)) || theme.shortTopic;
-        const behaviorText = behaviorNotes.length ? behaviorNotes.join('；') : '';
-        const strengthSentence = strengthsText ? `也能看出${strengthsText}方面有一些比较稳定的基础` : '课堂中能跟上任务节奏';
-        const improvementSentence = improvementsText
-          ? `后续可以继续加强${improvementsText}，尤其是完成作品后的复盘表达`
-          : `后续可以继续加强调试和复盘表达`;
+        const scoreAlignedSentences = filterConflictingAbilitySentences(teacherSentences, scoreProfile);
+        const teacherObservation = getTeacherObservationSnippet(scoreAlignedSentences);
+        const reportParagraphs = buildLearningReportParagraphs(scoreProfile, studentAlias, teacherObservation);
 
         const polishedProjectName = keywordText || current.projectName;
         const learningContent = `本阶段课程主要围绕${theme.topic}展开，重点接触了${keywords.slice(0, 3).join('、') || theme.shortTopic}等内容。学习过程中，孩子逐步理解了${theme.knowledge}，也开始把${theme.relation}联系起来。`;
-        const parentDescription = hasDetails
-          ? `这学期${studentAlias}在${representativeProject}相关任务中有比较具体的表现：${behaviorText}。从这些细节能看出，${studentAlias}对${theme.review}有了更实际的理解，${strengthSentence}。${improvementSentence}，把“为什么这样做、哪里还能改”说得更清楚。`
-          : `本阶段可以看出${studentAlias}对${theme.topic}相关内容接受较快，课堂中能较快理解任务要求并跟上操作节奏。${improvementSentence}，如果能结合一个具体项目说明自己的设计思路和调整过程，反馈会更有说服力。`;
+        const parentDescription = reportParagraphs.join('\n\n');
 
         setSummaryPolishHint(
-          hasDetails
+          teacherObservation
             ? ''
             : '建议补充一个具体项目或课堂表现，生成的家长反馈会更有针对性。',
         );
@@ -694,7 +862,11 @@ export default function App() {
               </div>
               <label className="photoUploadButton">
                 上传照片
-                <input accept="image/jpeg,image/png,image/webp,.heic,.heif" type="file" onChange={handleHighlightPhotoChange} />
+                <input
+                  accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.HEIC,.HEIF"
+                  type="file"
+                  onChange={handleHighlightPhotoChange}
+                />
               </label>
               {highlightPhoto && (
                 <div className="highlightPhotoCropEditor">
@@ -804,7 +976,7 @@ export default function App() {
                 value={form.projectParentReportDescription}
                 onChange={(event) => updateProjectField('projectParentReportDescription', event.target.value)}
                 placeholder={`建议围绕一个具体项目来写，例如：
-在某个项目中，孩子做了什么？体现出什么能力？后续可以继续加强什么？`}
+在某个项目中，孩子做了什么？体现出什么能力？后续适合如何巩固或提升？`}
               />
               {summaryPolishHint && <span className="fieldHint warning">{summaryPolishHint}</span>}
             </label>
@@ -940,6 +1112,7 @@ export default function App() {
           onDelete={handleDeleteTrialClassRecord}
         />
       )}
+      {route === '/competition' && <CompetitionAssessment onBack={() => navigateTo('/')} />}
       {route === '/lab' && <RobotSpecialTestDemo onBack={() => navigateTo('/')} />}
     </main>
   );

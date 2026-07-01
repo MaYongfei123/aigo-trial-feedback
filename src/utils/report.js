@@ -105,7 +105,8 @@ export function createEmptyScores(dimensions) {
 export function getRecordDimensions(record) {
   if (record?.dimensions?.length) return record.dimensions.map(normalizeAbilityDimension);
   const courseInfo = normalizeCourseInfo(record?.form || record || {});
-  return getAbilityDimensions(courseInfo.courseSystem);
+  const sourceForm = record?.form || record || {};
+  return getAbilityDimensions(sourceForm.grade || courseInfo.courseSystem);
 }
 
 export function getScoreSummary(scores, dimensions = legacyAbilityDimensions) {
@@ -197,7 +198,7 @@ export function getComparisonAnalysis(currentScores, currentDimensions, previous
   };
 }
 
-export function generateReport(form, scores, dimensions = getAbilityDimensions(form.courseSystem), comparison = null) {
+export function generateReport(form, scores, dimensions = getAbilityDimensions(form.grade || form.courseSystem), comparison = null) {
   const summary = getScoreSummary(scores, dimensions);
   const courseInfo = normalizeCourseInfo(form);
   const stageObservation = getStageObservation(form);

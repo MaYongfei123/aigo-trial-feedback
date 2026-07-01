@@ -89,6 +89,9 @@ export function normalizeCourseInfo(form = {}) {
 
 export const grades = [
   '幼儿园',
+  '小班',
+  '中班',
+  '大班',
   '一年级',
   '二年级',
   '三年级',
@@ -99,6 +102,79 @@ export const grades = [
   '初二',
   '初三',
 ];
+
+export const abilityModels = {
+  preschool: {
+    label: '幼儿园阶段',
+    grades: ['幼儿园', '小班', '中班', '大班'],
+    dimensions: [
+      '动手操作能力',
+      '课堂专注度',
+      '观察模仿能力',
+      '规则意识',
+      '表达分享能力',
+      '合作参与度',
+      '任务完成度',
+    ],
+  },
+  lowerPrimary: {
+    label: '小学低年级',
+    grades: ['一年级', '二年级'],
+    dimensions: [
+      '结构搭建能力',
+      '观察理解能力',
+      '简单控制能力',
+      '任务规则理解',
+      '课堂专注度',
+      '表达分享能力',
+      '合作参与度',
+    ],
+  },
+  middlePrimary: {
+    label: '小学中年级',
+    grades: ['三年级', '四年级'],
+    dimensions: [
+      '结构搭建能力',
+      '程序理解能力',
+      '调试排错能力',
+      '任务策略能力',
+      '课堂专注度',
+      '表达复盘能力',
+      '团队协作能力',
+    ],
+  },
+  upperPrimary: {
+    label: '小学高年级',
+    grades: ['五年级', '六年级'],
+    dimensions: [
+      '结构优化能力',
+      '程序设计能力',
+      '调试排错能力',
+      '任务策略能力',
+      '项目规划能力',
+      '表达复盘能力',
+      '团队协作能力',
+    ],
+  },
+};
+
+function createModelDimensions(modelKey, labels) {
+  return labels.map((label, index) => ({
+    key: `${modelKey}_${index + 1}`,
+    label,
+  }));
+}
+
+export const abilityDimensionsByGradeModel = Object.fromEntries(
+  Object.entries(abilityModels).map(([modelKey, model]) => [
+    modelKey,
+    createModelDimensions(modelKey, model.dimensions),
+  ]),
+);
+
+export function getAbilityModelByGrade(grade) {
+  return Object.entries(abilityModels).find(([, model]) => model.grades.includes(grade))?.[0] || '';
+}
 
 export const legacyAbilityDimensions = [
   { key: 'structure', label: '结构搭建能力' },
@@ -156,8 +232,12 @@ export function normalizeAbilityDimension(dimension) {
   };
 }
 
-export function getAbilityDimensions(courseSystem) {
-  const dimensions = abilityDimensionsByCourseSystem[courseSystem] || legacyAbilityDimensions;
+export function getAbilityDimensions(gradeOrCourseSystem) {
+  const gradeModel = getAbilityModelByGrade(gradeOrCourseSystem);
+  const dimensions =
+    abilityDimensionsByGradeModel[gradeModel] ||
+    abilityDimensionsByCourseSystem[gradeOrCourseSystem] ||
+    legacyAbilityDimensions;
   return dimensions.map(normalizeAbilityDimension);
 }
 

@@ -4,6 +4,7 @@ const STORAGE_KEY = 'aigo_assessment_records_v1';
 const PROJECTS_STORAGE_KEY = 'aigo_project_library_v1';
 const ROBOT_SPECIAL_TEST_STORAGE_KEY = 'aigo_robot_special_test_records_v1';
 const TRIAL_CLASS_RECORDS_STORAGE_KEY = 'trialClassRecords';
+const COMPETITION_ASSESSMENT_STORAGE_KEY = 'aigo_competition_assessment_records_v1';
 
 const defaultProjects = [
   {
@@ -192,5 +193,54 @@ export function saveTrialClassRecord(record) {
 export function deleteTrialClassRecord(recordId) {
   const nextRecords = loadTrialClassRecords().filter((record) => record.id !== recordId);
   window.localStorage.setItem(TRIAL_CLASS_RECORDS_STORAGE_KEY, JSON.stringify(nextRecords));
+  return nextRecords;
+}
+
+function normalizeCompetitionAssessmentRecord(record = {}) {
+  return {
+    id: record.id || crypto.randomUUID(),
+    createdAt: record.createdAt || new Date().toISOString(),
+    studentName: record.studentName || '',
+    grade: record.grade || '',
+    courseSystem: '机器人',
+    competitionType: record.competitionType || '',
+    assessmentDate: record.assessmentDate || '',
+    teacher: record.teacher || '',
+    notes: record.notes || '',
+    scores: record.scores || {},
+    behaviorSelections: record.behaviorSelections || {},
+    dimensions: Array.isArray(record.dimensions) ? record.dimensions : [],
+    report: record.report || {},
+  };
+}
+
+export function loadCompetitionAssessmentRecords() {
+  try {
+    const raw = window.localStorage.getItem(COMPETITION_ASSESSMENT_STORAGE_KEY);
+    const records = raw ? JSON.parse(raw) : [];
+    return Array.isArray(records) ? records.map(normalizeCompetitionAssessmentRecord) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveCompetitionAssessmentRecord(record) {
+  const records = loadCompetitionAssessmentRecords();
+  const nextRecord = normalizeCompetitionAssessmentRecord({
+    ...record,
+    id: record.id || crypto.randomUUID(),
+    createdAt: record.createdAt || new Date().toISOString(),
+  });
+  const nextRecords = [nextRecord, ...records.filter((item) => item.id !== nextRecord.id)];
+  window.localStorage.setItem(COMPETITION_ASSESSMENT_STORAGE_KEY, JSON.stringify(nextRecords));
+  return {
+    record: nextRecord,
+    records: nextRecords,
+  };
+}
+
+export function deleteCompetitionAssessmentRecord(recordId) {
+  const nextRecords = loadCompetitionAssessmentRecords().filter((record) => record.id !== recordId);
+  window.localStorage.setItem(COMPETITION_ASSESSMENT_STORAGE_KEY, JSON.stringify(nextRecords));
   return nextRecords;
 }

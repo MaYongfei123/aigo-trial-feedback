@@ -134,6 +134,10 @@ button:disabled {
   background: #8a4b13;
 }
 
+.competitionEntry .featureIcon {
+  background: #164a86;
+}
+
 .secondaryMenu {
   display: grid;
   grid-template-columns: 1fr;
@@ -1936,6 +1940,356 @@ input[type="range"] {
   font-weight: 800;
 }
 
+.competitionPage {
+  display: grid;
+  gap: 16px;
+  width: min(100%, 1180px);
+  margin: 0 auto;
+}
+
+.competitionIntro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 14px;
+  padding: 18px;
+  color: #ffffff;
+  background:
+    linear-gradient(135deg, rgba(22, 74, 134, 0.96), rgba(18, 103, 132, 0.9)),
+    url("https://images.unsplash.com/photo-1581092160562-40aa08e78837?auto=format&fit=crop&w=1400&q=80");
+  background-position: center;
+  background-size: cover;
+  border-radius: 8px;
+}
+
+.competitionIntro > div {
+  display: grid;
+  gap: 8px;
+  align-content: center;
+}
+
+.competitionIntro svg {
+  color: #dff0ff;
+}
+
+.competitionIntro strong {
+  font-size: 22px;
+  line-height: 1.3;
+}
+
+.competitionIntro span {
+  color: #e8f3ff;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.competitionIntroMetric {
+  justify-items: center;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+}
+
+.competitionIntroMetric strong {
+  font-size: 42px;
+  line-height: 1;
+}
+
+.competitionTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px;
+  background: #edf5fa;
+  border: 1px solid #dbe7f1;
+  border-radius: 8px;
+}
+
+.competitionTabs button {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 14px;
+  color: #164a86;
+  background: #ffffff;
+  border: 1px solid #c8d9ea;
+  border-radius: 6px;
+  font-weight: 800;
+}
+
+.competitionTabs button.active {
+  color: #ffffff;
+  background: #164a86;
+  border-color: #164a86;
+}
+
+.competitionLayout {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.78fr) minmax(380px, 1.18fr) minmax(300px, 0.84fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.competitionPanel {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  background: #ffffff;
+  border: 1px solid #dbe7f1;
+  border-radius: 8px;
+  box-shadow: 0 14px 34px rgba(26, 57, 88, 0.07);
+}
+
+.competitionBasicGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.competitionScorePanel {
+  gap: 12px;
+}
+
+.competitionScoreCard {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: #f7fbff;
+  border: 1px solid #dbe7f1;
+  border-radius: 8px;
+}
+
+.competitionScoreTitle {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.competitionScoreTitle h3 {
+  margin: 0;
+  color: #12365d;
+  font-size: 16px;
+}
+
+.competitionScoreTitle strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  height: 32px;
+  color: #ffffff;
+  background: #164a86;
+  border-radius: 6px;
+}
+
+.behaviorOptions {
+  display: grid;
+  gap: 8px;
+}
+
+.behaviorOptions button {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  width: 100%;
+  padding: 9px 10px;
+  color: #344b63;
+  text-align: left;
+  background: #ffffff;
+  border: 1px solid #cfdeec;
+  border-radius: 6px;
+  line-height: 1.45;
+}
+
+.behaviorOptions button span {
+  color: #164a86;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.behaviorOptions button.active {
+  background: #eef5fc;
+  border-color: #164a86;
+  box-shadow: 0 0 0 2px rgba(22, 74, 134, 0.08);
+}
+
+.competitionScoreSlider {
+  gap: 6px;
+  font-size: 13px;
+}
+
+.competitionScoreSlider > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 10px;
+  align-items: center;
+}
+
+.competitionScoreSlider strong {
+  display: grid;
+  place-items: center;
+  height: 30px;
+  color: #164a86;
+  background: #e8f1fb;
+  border-radius: 6px;
+}
+
+.competitionPreviewPanel {
+  position: sticky;
+  top: 16px;
+}
+
+.competitionScoreHero {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  padding: 16px;
+  background: #eef5fc;
+  border: 1px solid #d6e4f1;
+  border-radius: 8px;
+}
+
+.competitionScoreHero span,
+.competitionScoreHero small {
+  color: #5b7188;
+  font-size: 13px;
+}
+
+.competitionScoreHero strong {
+  color: #164a86;
+  font-size: 48px;
+  line-height: 1;
+}
+
+.competitionReportBlocks {
+  display: grid;
+  gap: 10px;
+}
+
+.competitionReportBlocks section {
+  padding: 12px;
+  background: #f7fbff;
+  border: 1px solid #dbe7f1;
+  border-radius: 8px;
+}
+
+.competitionReportBlocks h3 {
+  margin: 0 0 8px;
+  color: #164a86;
+  font-size: 15px;
+}
+
+.competitionReportBlocks p {
+  margin: 0;
+  color: #344b63;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.competitionRecordList {
+  display: grid;
+  gap: 10px;
+}
+
+.competitionRecordCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: 10px;
+  align-items: stretch;
+  padding: 10px;
+  background: #f8fbfe;
+  border: 1px solid #dce8f2;
+  border-radius: 8px;
+}
+
+.competitionRecordCard > button:first-child {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(130px, 0.9fr) minmax(120px, 0.8fr) 70px;
+  gap: 12px;
+  align-items: center;
+  color: #344b63;
+  text-align: left;
+  background: transparent;
+  border: 0;
+}
+
+.competitionRecordCard span,
+.competitionRecordCard small {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.competitionRecordCard span {
+  color: #12365d;
+  font-weight: 900;
+}
+
+.competitionRecordCard small {
+  color: #66798c;
+  font-size: 13px;
+}
+
+.competitionRecordCard strong {
+  color: #164a86;
+  font-size: 18px;
+}
+
+.competitionReportPage {
+  width: min(100%, 920px);
+  margin: 0 auto;
+}
+
+.competitionReportHeader {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.competitionReportHeader div,
+.competitionDimensionRows div {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  background: #f7fbff;
+  border: 1px solid #dbe7f1;
+  border-radius: 8px;
+}
+
+.competitionReportHeader span,
+.competitionDimensionRows span {
+  color: #66798c;
+  font-size: 12px;
+}
+
+.competitionReportHeader strong,
+.competitionDimensionRows strong {
+  color: #12365d;
+  font-size: 15px;
+}
+
+.competitionReportMain {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+}
+
+.competitionDimensionRows {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.competitionReportActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .robotDemoPage {
   display: grid;
   gap: 18px;
@@ -3336,6 +3690,20 @@ input[type="range"] {
     grid-template-columns: 1fr;
   }
 
+  .competitionLayout,
+  .competitionReportMain {
+    grid-template-columns: 1fr;
+  }
+
+  .competitionPreviewPanel {
+    position: static;
+  }
+
+  .competitionRecordCard,
+  .competitionRecordCard > button:first-child {
+    grid-template-columns: 1fr;
+  }
+
   .robotResultPanel {
     position: static;
   }
@@ -3366,7 +3734,7 @@ input[type="range"] {
   }
 
   .featureCards {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .secondaryMenu {
@@ -3390,6 +3758,10 @@ input[type="range"] {
   .reportInfoGrid,
   .trialShareSections,
   .robotDemoIntro,
+  .competitionIntro,
+  .competitionBasicGrid,
+  .competitionReportHeader,
+  .competitionDimensionRows,
   .robotTestCards,
   .robotTestCards.single,
   .specialRecordSummary,
