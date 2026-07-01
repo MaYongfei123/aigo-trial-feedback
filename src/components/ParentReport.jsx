@@ -101,7 +101,7 @@ export default function ParentReport({ record, onCopy, copied }) {
         <div className="reportSection">
           <h3>学习依据</h3>
           {form.projectName && <p>本阶段内容摘要：{form.projectName}</p>}
-          {form.projectLearningContent && <p>学习内容：{form.projectLearningContent}</p>}
+          {form.projectLearningContent && <p>学期总结：{form.projectLearningContent}</p>}
           {form.projectAbilities && <p>对应能力：{form.projectAbilities}</p>}
           {form.projectParentReportDescription && <p>家长报告描述：{form.projectParentReportDescription}</p>}
         </div>

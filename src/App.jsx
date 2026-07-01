@@ -261,24 +261,25 @@ function getAbilityScoreProfile(scoreEntries) {
   }));
   const highSorted = [...entries].sort((a, b) => b.score - a.score || a.index - b.index);
   const lowSorted = [...entries].sort((a, b) => a.score - b.score || a.index - b.index);
-  const highestAbilities = highSorted.slice(0, 2);
+  const highestScore = highSorted[0]?.score || 3;
+  const lowestScore = lowSorted[0]?.score || 3;
+  const highestAbilities =
+    highestScore >= 5 ? entries.filter((item) => item.score === highestScore).slice(0, 6) : highSorted.slice(0, 2);
   const allScoresSame = entries.every((item) => item.score === entries[0]?.score);
-  const lowestAbilities = allScoresSame
-    ? lowSorted.slice(0, 2)
-    : lowSorted.filter((item) => !highestAbilities.some((ability) => ability.key === item.key)).slice(0, 2);
+  const lowestAbilities = lowestScore < 5 ? lowSorted.filter((item) => item.score === lowestScore).slice(0, 2) : [];
 
   return {
     entries,
     highestAbilities,
     lowestAbilities,
-    highestScore: highSorted[0]?.score || 3,
-    lowestScore: lowSorted[0]?.score || 3,
+    highestScore,
+    lowestScore,
     allScoresSame,
   };
 }
 
-function formatAbilityNames(abilities) {
-  return abilities.map((item) => item.label).join('、');
+function formatShortAbilityNames(abilities) {
+  return abilities.map((item) => item.label.replace(/能力$/, '')).join('、');
 }
 
 function filterConflictingAbilitySentences(sentences, scoreProfile) {
@@ -292,72 +293,91 @@ function filterConflictingAbilitySentences(sentences, scoreProfile) {
 }
 
 function getTeacherObservationSnippet(sentences) {
-  const contentSummaryPattern = /(本阶段课程主要|学习过程中|主要围绕|重点接触|逐步理解|学习了|认识了|接触了|课程|项目名称|学习内容总结)/;
+  const contentSummaryPattern = /(本阶段课程主要|学习过程中|主要围绕|重点接触|逐步理解|学习了|认识了|接触了|课程|项目名称|学习内容总结|学期总结|本学期典型课程)/;
   const observation = sentences.find(
     (sentence) =>
       !contentSummaryPattern.test(sentence) &&
-      /(愿意|能够|能|较快|稳定|主动|专注|完成|表达|合作|尝试|跟上|参与|坚持)/.test(sentence),
+      /(遇到|问题|不会|无法|不能|主动|思考|找到|调整|尝试|解决|愿意|能够|能|较快|稳定|专注|完成|表达|合作|参与|坚持)/.test(sentence),
   );
 
   if (!observation) return '';
-  return observation.length > 42 ? `${observation.slice(0, 42)}。` : observation;
+  return observation.replace(/^(家长报告描述|学习内容总结|学期总结|摘要)[:：]?/, '').trim();
 }
 
-function buildLearningReportParagraphs(scoreProfile, studentAlias, teacherObservation) {
-  const strengthNames = formatAbilityNames(scoreProfile.highestAbilities);
-  const lowerNames = formatAbilityNames(scoreProfile.lowestAbilities);
-  const observationText = teacherObservation
-    ? `结合老师观察，${teacherObservation.replace(/[。！？]$/, '')}。`
-    : '课堂中愿意参与任务，也能在老师引导下完成阶段要求。';
+function cleanProjectSummary(value) {
+  return uniqueProjectItems(
+    value
+      .split(/[、,，;；\n]+/)
+      .map((item) =>
+        item
+          .replace(/^【.*?】/, '')
+          .replace(/(项目|课程)?[:：].*$/, '')
+          .trim(),
+      )
+      .filter((item) => item.length >= 2 && item.length <= 18)
+      .filter((item) => !/(积极|能力|表现|评价|完成|理解|参与|主动|思考|解决|问题|老师|孩子|学员|本学期|本阶段)/.test(item)),
+  ).join('、');
+}
 
-  if (scoreProfile.allScoresSame) {
-    if (scoreProfile.highestScore >= 5) {
-      return [
-        `结合阶段能力画像来看，${studentAlias}各项能力表现都比较突出，整体发展很均衡。${observationText}这是本阶段比较明显的优势。`,
-        `下一阶段可以提高任务开放度，引导${studentAlias}把已有优势迁移到更多作品和合作任务中，继续保持稳定投入和表达分享。`,
-      ];
-    }
+function getParticipationSummary(text) {
+  if (/积极|主动|投入|认真|愿意/.test(text)) return '整体参与积极';
+  if (/完成.*高|完成.*好|完成度.*高/.test(text)) return '完成积极度较高';
+  if (/专注|稳定/.test(text)) return '课堂状态比较稳定';
+  return '';
+}
 
-    if (scoreProfile.highestScore >= 4) {
-      return [
-        `结合阶段能力画像来看，${studentAlias}各项能力表现较稳定，整体基础比较扎实。${observationText}后续可以继续保持这种学习状态。`,
-        `下一阶段建议逐步增加任务综合度，让${studentAlias}在完成作品后多说一说想法、方法和调整过程，帮助能力表现更加稳定。`,
-      ];
-    }
+function trimReportText(text, maxLength = 120) {
+  const normalized = text.replace(/\s+/g, '').replace(/。{2,}/g, '。');
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength - 1)}。`;
+}
 
-    if (scoreProfile.highestScore === 3) {
-      return [
-        `结合阶段能力画像来看，${studentAlias}各项能力处于正常发展区间，整体比较均衡。${observationText}这些表现可以作为后续继续巩固的基础。`,
-        `后续可以通过更多短任务持续观察${studentAlias}的规则理解、表达分享和任务完成情况，不急于拔高，先把稳定性建立起来。`,
-      ];
-    }
+function stripTermPrefix(text = '') {
+  return text
+    .replace(/本学期/g, '')
+    .replace(/本阶段/g, '')
+    .replace(/这个阶段/g, '')
+    .replace(/本次/g, '')
+    .trim();
+}
 
-    return [
-      `结合阶段能力画像来看，${studentAlias}目前各项能力还在建立中，需要更多清晰示范和正向反馈。${observationText}`,
-      `后续建议先用小步骤任务帮助${studentAlias}积累成功经验，重点关注专注参与、规则理解和完成后的简单表达。`,
-    ];
+function limitTermWordUsage(text) {
+  let used = false;
+  return text.replace(/本学期/g, () => {
+    if (used) return '';
+    used = true;
+    return '本学期';
+  });
+}
+
+function buildParentReportDescription({ projectText, learningText, teacherObservation, scoreProfile, studentAlias }) {
+  const projects = stripTermPrefix(projectText) || '代表性项目';
+  const cleanLearningText = stripTermPrefix(learningText);
+  const cleanObservation = stripTermPrefix(teacherObservation).replace(/[。！？]$/, '');
+  const participation = getParticipationSummary(`${cleanLearningText}。${cleanObservation}`);
+  const strengthNames = formatShortAbilityNames(scoreProfile.highestAbilities);
+  const abilityText = scoreProfile.highestScore >= 5
+    ? `从能力画像看，${studentAlias}在${strengthNames}方面表现都很突出。`
+    : scoreProfile.highestScore === 4
+      ? `从能力画像看，${studentAlias}在${strengthNames}方面表现比较稳定。`
+      : `从能力画像看，${studentAlias}正在积累${strengthNames}方面的经验。`;
+  const adviceNames = formatShortAbilityNames(scoreProfile.lowestAbilities);
+  let adviceText = '后续可以继续增加挑战难度，让这些优势迁移到更完整的项目表达中。';
+  if (scoreProfile.lowestScore <= 2 && scoreProfile.lowestAbilities.length) {
+    adviceText = `后续可以重点提升${adviceNames}，先从更小的任务步骤慢慢建立信心。`;
+  } else if (scoreProfile.lowestScore === 3 && scoreProfile.lowestAbilities.length) {
+    adviceText = `后续可以继续加强${adviceNames}，让孩子在完成作品后多说一说自己的想法。`;
+  } else if (scoreProfile.lowestScore === 4 && scoreProfile.lowestAbilities.length) {
+    adviceText = `后续可以在${adviceNames}上进一步优化，例如增加主动沟通和分工参与。`;
   }
+  const behaviorText = cleanObservation
+    ? `${cleanObservation}。${abilityText}`
+    : `${studentAlias}在课堂中${participation || '能参与完成任务'}。${abilityText}`;
+  const participationText = participation ? `${participation}。` : '';
 
-  let strengthDescription = `在${strengthNames}上有一定基础`;
-  if (scoreProfile.highestScore >= 5) {
-    strengthDescription = `在${strengthNames}上表现比较突出`;
-  } else if (scoreProfile.highestScore === 4) {
-    strengthDescription = `在${strengthNames}上表现较稳定，已经有较好基础`;
-  }
-
-  let adviceDescription = `后续可围绕${lowerNames}继续巩固和观察`;
-  if (scoreProfile.lowestScore <= 2) {
-    adviceDescription = `后续可以重点引导${lowerNames}`;
-  } else if (scoreProfile.lowestScore === 3) {
-    adviceDescription = `后续可以继续引导${studentAlias}在${lowerNames}方面多做练习`;
-  } else if (scoreProfile.lowestScore >= 4) {
-    adviceDescription = `${lowerNames}也已有较好基础，后续以巩固稳定性为主`;
-  }
-
-  return [
-    `结合阶段能力画像来看，${studentAlias}${strengthDescription}。${observationText}这是本阶段比较值得肯定的成长表现。`,
-    `${adviceDescription}，例如完成作品后说一说“我做了什么、哪里最有趣、还想怎么改”，帮助孩子把过程和想法表达得更清楚。`,
-  ];
+  return limitTermWordUsage(
+    trimReportText(`${studentAlias}本学期完成了${projects}等项目，${participationText}${behaviorText}${adviceText}`, 160),
+  );
 }
 
 function isHeicImageFile(file) {
@@ -664,6 +684,11 @@ export default function App() {
   }
 
   function handlePolishLearningSummary() {
+    if (form.projectParentReportDescription.trim()) {
+      const ok = window.confirm('重新生成会覆盖当前家长报告内容，是否继续？');
+      if (!ok) return;
+    }
+
     setSummaryPolishStatus('working');
     setSummaryPolishHint('');
 
@@ -671,38 +696,30 @@ export default function App() {
       setForm((current) => {
         const dimensions = getAbilityDimensions(current.grade);
         const scoreSummary = getScoreSummary(scores, dimensions);
-        const teacherSentences = splitTeacherSentences(
-          current.projectName,
-          current.projectLearningContent,
-          current.projectParentReportDescription,
-        );
-        const keywords = collectSummaryKeywords(
-          current.projectName,
-          current.projectLearningContent,
-          current.projectParentReportDescription,
-        );
-        const theme = inferLearningTheme(keywords);
-        const keywordText = keywords.length ? formatKeywordSummary(keywords) : current.projectName.trim();
+        const teacherSentences = splitTeacherSentences(current.projectLearningContent);
+        const projectKeywords = collectSummaryKeywords(current.projectName);
+        const projectText = cleanProjectSummary(projectKeywords.length ? formatKeywordSummary(projectKeywords) : current.projectName);
         const scoreProfile = getAbilityScoreProfile(scoreSummary.entries);
-        const studentAlias = findStudentAlias(current, teacherSentences);
+        const studentAlias = current.studentName.trim() || findStudentAlias(current, teacherSentences) || '孩子';
         const scoreAlignedSentences = filterConflictingAbilitySentences(teacherSentences, scoreProfile);
         const teacherObservation = getTeacherObservationSnippet(scoreAlignedSentences);
-        const reportParagraphs = buildLearningReportParagraphs(scoreProfile, studentAlias, teacherObservation);
-
-        const polishedProjectName = keywordText || current.projectName;
-        const learningContent = `本阶段课程主要围绕${theme.topic}展开，重点接触了${keywords.slice(0, 3).join('、') || theme.shortTopic}等内容。学习过程中，孩子逐步理解了${theme.knowledge}，也开始把${theme.relation}联系起来。`;
-        const parentDescription = reportParagraphs.join('\n\n');
+        const parentDescription = buildParentReportDescription({
+          projectText,
+          learningText: current.projectLearningContent,
+          teacherObservation,
+          scoreProfile,
+          studentAlias,
+        });
 
         setSummaryPolishHint(
           teacherObservation
             ? ''
-            : '建议补充一个具体项目或课堂表现，生成的家长反馈会更有针对性。',
+            : '建议补充一个具体项目中的表现细节，生成的家长反馈会更贴近课堂。',
         );
 
         return {
           ...current,
-          projectName: polishedProjectName || current.projectName,
-          projectLearningContent: learningContent,
+          projectName: projectText || current.projectName,
           projectParentReportDescription: parentDescription,
         };
       });
@@ -715,7 +732,7 @@ export default function App() {
       !form.studentName.trim() || !form.grade || !form.projectParentReportDescription.trim();
 
     if (requiredFieldsMissing) {
-      setNotice('请先填写学员姓名、年级和学习报告内容，再生成分享卡片。');
+      setNotice('请先填写学员姓名、年级，并生成或填写家长报告描述，再预览分享卡片。');
       return;
     }
 
@@ -910,21 +927,9 @@ export default function App() {
         <section className="reportBuilderModule">
           <div className="panelHeader reportSummaryHeader">
             <div>
-              <h2>学习内容 & 项目总结</h2>
+              <h2>本学期课程与学期总结</h2>
               <span>{availableProjects.length ? `${availableProjects.length} 个课程内容 · 已选 ${selectedProjectCount}` : '手动填写'}</span>
             </div>
-            <button
-              className={`summaryPolishButton ${summaryPolishStatus === 'done' ? 'done' : ''}`}
-              type="button"
-              onClick={handlePolishLearningSummary}
-              disabled={summaryPolishStatus === 'working'}
-            >
-              {summaryPolishStatus === 'working'
-                ? '正在整理...'
-                : summaryPolishStatus === 'done'
-                  ? '已整理，可继续修改'
-                  : '一键整理学习总结'}
-            </button>
           </div>
 
           <div className="projectMultiSelect reportCourseList" aria-label="本学期课程列表">
@@ -963,22 +968,12 @@ export default function App() {
               />
             </label>
             <label>
-              学习内容总结
+              学期总结
               <textarea
                 value={form.projectLearningContent}
                 onChange={(event) => updateProjectField('projectLearningContent', event.target.value)}
-                placeholder="概括本阶段学习主题、项目任务和完成情况"
+                placeholder="请填写本阶段学期总结，例如项目完成情况、课堂参与度、学习状态和综合表现。"
               />
-            </label>
-            <label>
-              家长报告描述
-              <textarea
-                value={form.projectParentReportDescription}
-                onChange={(event) => updateProjectField('projectParentReportDescription', event.target.value)}
-                placeholder={`建议围绕一个具体项目来写，例如：
-在某个项目中，孩子做了什么？体现出什么能力？后续适合如何巩固或提升？`}
-              />
-              {summaryPolishHint && <span className="fieldHint warning">{summaryPolishHint}</span>}
             </label>
           </div>
         </section>
@@ -1005,14 +1000,44 @@ export default function App() {
               <h3>阶段能力画像</h3>
               <RadarScoreChart currentAssessment={currentAssessment} comparisonAssessment={null} />
             </div>
+          </div>
 
-            <div className="reportBuilderActions">
-              <button className="primaryButton" type="button" onClick={handleSave}>
-                <Save size={18} />
-                保存并预览分享卡片
+          <div className="parentReportEditor">
+            <div className="panelHeader compact">
+              <div>
+                <h2>家长报告描述</h2>
+                <span>系统根据项目、学期总结和能力评分自动生成，老师可修改。</span>
+              </div>
+              <button
+                className={`summaryPolishButton ${summaryPolishStatus === 'done' ? 'done' : ''}`}
+                type="button"
+                onClick={handlePolishLearningSummary}
+                disabled={summaryPolishStatus === 'working'}
+              >
+                {summaryPolishStatus === 'working'
+                  ? '正在生成...'
+                  : summaryPolishStatus === 'done'
+                    ? '已生成，可继续修改'
+                    : '生成家长报告'}
               </button>
-              {notice && <div className="notice">{notice}</div>}
             </div>
+            <label>
+              家长报告描述
+              <textarea
+                value={form.projectParentReportDescription}
+                onChange={(event) => updateProjectField('projectParentReportDescription', event.target.value)}
+                placeholder="请先完成项目、学期总结和能力评分，再点击“生成家长报告”。生成后老师可以继续手动修改。"
+              />
+              {summaryPolishHint && <span className="fieldHint warning">{summaryPolishHint}</span>}
+            </label>
+          </div>
+
+          <div className="reportBuilderActions">
+            <button className="primaryButton" type="button" onClick={handleSave}>
+              <Save size={18} />
+              保存并预览分享卡片
+            </button>
+            {notice && <div className="notice">{notice}</div>}
           </div>
         </section>
       </section>

@@ -113,23 +113,6 @@ export default function ParentShareCard({ record, onBackEdit, highlightPhoto }) 
               </div>
             )}
 
-            {(content.projectName || content.projectLearningContent) && (
-              <div className="shareLearningSections">
-                {content.projectName && (
-                  <section>
-                    <h3>本学期典型课程 / 项目</h3>
-                    <p>{content.projectName}</p>
-                  </section>
-                )}
-                {content.projectLearningContent && (
-                  <section>
-                    <h3>学习内容总结</h3>
-                    <p>{content.projectLearningContent}</p>
-                  </section>
-                )}
-              </div>
-            )}
-
             <div className="shareChart">
               <h3>阶段能力画像</h3>
               <RadarScoreChart
@@ -140,7 +123,7 @@ export default function ParentShareCard({ record, onBackEdit, highlightPhoto }) 
 
             {reportParagraphs.length > 0 && (
               <div className="shareReportBlock">
-                <h3>学习报告</h3>
+                <h3>家长报告描述</h3>
                 {reportParagraphs.map((paragraph, index) => (
                   <p key={`${paragraph}-${index}`}>{paragraph}</p>
                 ))}

@@ -370,7 +370,7 @@ export function buildParentReportText(record) {
       ? [
           ``,
           form.projectName ? `本阶段内容摘要：${form.projectName}` : null,
-          form.projectLearningContent ? `学习内容：${form.projectLearningContent}` : null,
+          form.projectLearningContent ? `学期总结：${form.projectLearningContent}` : null,
           form.projectAbilities ? `对应能力：${form.projectAbilities}` : null,
           form.projectParentReportDescription ? `项目说明：${form.projectParentReportDescription}` : null,
         ]

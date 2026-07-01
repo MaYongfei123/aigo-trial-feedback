@@ -412,6 +412,23 @@ button:disabled {
   min-height: 104px;
 }
 
+.parentReportEditor {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: #f7fbff;
+  border: 1px solid #dbe7f1;
+  border-radius: 8px;
+}
+
+.parentReportEditor .panelHeader.compact {
+  margin: 0;
+}
+
+.parentReportEditor textarea {
+  min-height: 132px;
+}
+
 .reportAbilityGrid {
   display: grid;
   grid-template-columns: minmax(280px, 0.45fr) minmax(0, 0.55fr);
